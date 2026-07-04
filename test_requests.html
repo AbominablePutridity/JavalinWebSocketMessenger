@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Messenger — WebSocket тестер</title>
+    <style>
+        body { font-family: monospace; max-width: 900px; margin: 20px auto; padding: 0 20px; background: #1e1e2e; color: #cdd6f4; }
+        h1 { color: #89b4fa; }
+        h2 { color: #a6e3a1; margin-top: 24px; }
+        button { padding: 8px 16px; margin: 4px; cursor: pointer; background: #45475a; color: #cdd6f4; border: 1px solid #585b70; border-radius: 4px; }
+        button:hover { background: #585b70; }
+        pre { background: #181825; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+        #log { height: 400px; overflow-y: scroll; background: #11111b; padding: 8px; border-radius: 6px; font-size: 13px; }
+        .sent { color: #89b4fa; }
+        .received { color: #a6e3a1; }
+        .error { color: #f38ba8; }
+        .info { color: #f9e2af; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Messenger — WebSocket тестер</h1>
+
+    <button onclick="connect()">🔗 Подключиться</button>
+    <button onclick="disconnect()">🔌 Отключиться</button>
+    <span id="status" style="margin-left: 12px; color: #f9e2af;">● Не подключён</span>
+
+    <h2>📤 Запросы (выберите userCode и нажмите кнопку)</h2>
+    <label>userCode:
+        <select id="userCode">
+            <option value="user-alice">Алиса (user-alice)</option>
+            <option value="user-bob">Боб (user-bob)</option>
+            <option value="user-charlie">Чарли (user-charlie)</option>
+        </select>
+    </label>
+
+    <br><br>
+
+    <button onclick="createChannel()">📁 CREATE_CHANNEL</button>
+    <button onclick="deleteChannel()">🗑️ DELETE_CHANNEL</button>
+    <button onclick="updateChannel()">✏️ UPDATE_CHANNEL</button>
+
+    <br><br>
+
+    <!-- Поиск с произвольным именем (для проверки ILIKE / %like%) -->
+    <label>🔍 Поиск каналов по имени:
+        <input type="text" id="searchName" placeholder="часть названия" size="20">
+    </label>
+    <button onclick="searchChannels('')">Все мои каналы</button>
+    <button onclick="searchByName()">Искать</button>
+
+    <br><br>
+
+    <!-- Добавление участника в канал -->
+    <label>➕ Добавить участника в канал:</label>
+    <input type="text" id="memberCode" placeholder="код пользователя" size="16">
+    <input type="text" id="channelForMember" placeholder="код канала" size="20">
+    <button onclick="addMember()">Добавить</button>
+
+    <hr style="border-color:#45475a; margin: 20px 0;">
+
+    <h2>💬 Сообщения</h2>
+
+    <button onclick="createMessage()">✉️ CREATE_MESSAGE</button>
+    <button onclick="updateMessage()">✏️ UPDATE_MESSAGE</button>
+    <button onclick="deleteMessage()">🗑️ DELETE_MESSAGE</button>
+
+    <br><br>
+
+    <!-- Поиск сообщений -->
+    <label>🔍 Поиск сообщений (текст):
+        <input type="text" id="searchMsgText" placeholder="часть текста" size="20">
+    </label>
+    <label>канал:
+        <input type="text" id="searchMsgChannel" placeholder="code канала" size="20">
+    </label>
+    <button onclick="searchMessages()">Искать</button>
+
+    <h2>📋 Лог</h2>
+    <div id="log"></div>
+
+    <script>
+        let ws = null;
+
+        function log(msg, cls = 'info') {
+            const el = document.getElementById('log');
+            const line = document.createElement('div');
+            line.className = cls;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            el.appendChild(line);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function getUserCode() {
+            return document.getElementById('userCode').value;
+        }
+
+        function sendToWs(action, payload = {}) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket не подключён', 'error');
+                return;
+            }
+            const msg = JSON.stringify({ action, userCode: getUserCode(), payload });
+            log('→ ' + msg, 'sent');
+            ws.send(msg);
+        }
+
+        function connect() {
+            if (ws) ws.close();
+            ws = new WebSocket('ws://localhost:7070/websocket');
+
+            ws.onopen = () => {
+                document.getElementById('status').textContent = '● Подключён';
+                document.getElementById('status').style.color = '#a6e3a1';
+                log('✅ Подключено к ws://localhost:7070/websocket', 'info');
+            };
+
+            ws.onmessage = (event) => {
+                log('← ' + event.data, 'received');
+            };
+
+            ws.onclose = () => {
+                document.getElementById('status').textContent = '● Отключён';
+                document.getElementById('status').style.color = '#f9e2af';
+                log('🔌 Соединение закрыто', 'info');
+            };
+
+            ws.onerror = (err) => {
+                log('❌ Ошибка: ' + err, 'error');
+            };
+        }
+
+        function disconnect() {
+            if (ws) ws.close();
+        }
+
+        // ======== ДЕЙСТВИЯ ========
+
+        // 1. Создать канал
+        function createChannel() {
+            const name = prompt('Название канала:');
+            if (!name) return;
+            const desc = prompt('Описание (можно оставить пустым):') || '';
+            sendToWs('CREATE_CHANNEL', { name, description: desc });
+        }
+
+        // 2. Поиск каналов — все каналы текущего пользователя
+        function searchChannels(name) {
+            sendToWs('SEARCH_CHANNELS', { name });
+        }
+
+        // 2а. Поиск по введённому имени (частичное совпадение)
+        function searchByName() {
+            const name = document.getElementById('searchName').value;
+            sendToWs('SEARCH_CHANNELS', { name });
+        }
+
+        // 3. Удалить канал
+        function deleteChannel() {
+            const code = prompt('Введите code канала для удаления:');
+            if (!code) return;
+            sendToWs('DELETE_CHANNEL', { code });
+        }
+
+        // 4. Обновить канал
+        function updateChannel() {
+            const code = prompt('Введите code канала:');
+            if (!code) return;
+            const name = prompt('Новое название (оставьте пустым, чтобы не менять):');
+            const desc = prompt('Новое описание (оставьте пустым, чтобы не менять):');
+            const payload = { code };
+            if (name) payload.name = name;
+            if (desc) payload.description = desc;
+            sendToWs('UPDATE_CHANNEL', payload);
+        }
+
+        // 5. Добавить участника в канал
+        function addMember() {
+            const memberCode = document.getElementById('memberCode').value;
+            const channelCode = document.getElementById('channelForMember').value;
+            if (!memberCode || !channelCode) {
+                log('❌ Заполните оба поля: код пользователя и код канала', 'error');
+                return;
+            }
+            sendToWs('ADD_MEMBER', { memberCode, channelCode });
+        }
+
+        // ======== СООБЩЕНИЯ ========
+
+        // 6. Отправить сообщение
+        function createMessage() {
+            const channelCode = prompt('Код канала:');
+            if (!channelCode) return;
+            const text = prompt('Текст сообщения:');
+            if (!text) return;
+            sendToWs('CREATE_MESSAGE', { channelCode, text });
+        }
+
+        // 7. Редактировать сообщение
+        function updateMessage() {
+            const id = prompt('ID сообщения:');
+            if (!id) return;
+            const text = prompt('Новый текст:');
+            if (!text) return;
+            sendToWs('UPDATE_MESSAGE', { messageId: parseInt(id), text });
+        }
+
+        // 8. Удалить сообщение
+        function deleteMessage() {
+            const id = prompt('ID сообщения:');
+            if (!id) return;
+            sendToWs('DELETE_MESSAGE', { messageId: parseInt(id) });
+        }
+
+        // 9. Поиск сообщений
+        function searchMessages() {
+            const channelCode = document.getElementById('searchMsgChannel').value;
+            if (!channelCode) {
+                log('❌ Введите код канала', 'error');
+                return;
+            }
+            const text = document.getElementById('searchMsgText').value;
+            sendToWs('SEARCH_MESSAGES', { channelCode, text, page: 1, size: 20 });
+        }
+    </script>
+</body>
+</html>

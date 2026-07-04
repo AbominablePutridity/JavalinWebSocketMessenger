@@ -7,10 +7,11 @@ import java.time.LocalDateTime;
  * @author User
  */
 public class ChannelDto {
-    private String code; // уникальный идентификатор канала
-    private String name;
-    private String description;
-    private LocalDateTime creationDate;
+    private String code;          // уникальный идентификатор канала
+    private String name;          // название канала
+    private String description;   // описание канала
+    private LocalDateTime creationDate; // дата и время создания канала
+    private String ownerCode;     // код пользователя-владельца канала
 
     public String getCode() {
         return code;
@@ -42,5 +43,13 @@ public class ChannelDto {
 
     public void setCreationDate(LocalDateTime creationDate) {
         this.creationDate = creationDate;
+    }
+
+    public String getOwnerCode() {
+        return ownerCode;
+    }
+
+    public void setOwnerCode(String ownerCode) {
+        this.ownerCode = ownerCode;
     }
 }

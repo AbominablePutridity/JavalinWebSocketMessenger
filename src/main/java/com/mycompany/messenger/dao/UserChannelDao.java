@@ -116,6 +116,36 @@ public class UserChannelDao {
         }
     }
 
+    // FIND ALL BY CHANNEL CODE - Получить все связи для указанного канала
+    // Нужно для маппинга отправителей при поиске сообщений
+    public List<UserChannelDto> findAllByChannelCode(String channelCode) throws SQLException {
+        String sql = "SELECT * FROM user_channels WHERE channel_code = ?";
+        List<UserChannelDto> list = new ArrayList<>();
+        try (Connection conn = DbConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, channelCode);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRowToDto(rs));
+                }
+            }
+        }
+        return list;
+    }
+
+    // DELETE BY CHANNEL CODE - Удаление всех связей для указанного канала
+    // Используется при удалении канала, чтобы очистить внешние ключи
+    public void deleteByChannelCode(String channelCode) throws SQLException {
+        String sql = "DELETE FROM user_channels WHERE channel_code = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, channelCode);
+            stmt.executeUpdate();
+        }
+    }
+
     // Вспомогательный метод для маппинга строки БД в объект DTO
     private UserChannelDto mapRowToDto(ResultSet rs) throws SQLException {
         UserChannelDto userChannel = new UserChannelDto();
