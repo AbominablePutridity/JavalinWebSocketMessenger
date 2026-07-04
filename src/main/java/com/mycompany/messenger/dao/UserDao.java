@@ -25,8 +25,7 @@ public class UserDao {
             stmt.setString(2, user.getName());
             stmt.setString(3, user.getSurname());
             // Конвертация LocalDateTime для JDBC
-            stmt.setObject(4, user.getRegistrationDate()); 
-            stmt.setString(5, user.getLogin());
+            stmt.setObject(4, user.getRegistrationDate());
             
             stmt.executeUpdate();
         }
@@ -48,16 +47,24 @@ public class UserDao {
         return null; // Пользователь не найден
     }
 
-    // READ ALL - Получение всех пользователей
-    public List<UserDto> findAll() throws SQLException {
-        String sql = "SELECT * FROM users";
+    // READ ALL WITH PAGINATION - Получение пользователей с пагинацией
+    public List<UserDto> findAll(int page, int size) throws SQLException {
+        String sql = "SELECT * FROM users LIMIT ? OFFSET ?";
         List<UserDto> users = new ArrayList<>();
-        try (Connection conn = DbConfig.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            while (rs.next()) {
-                users.add(mapRowToDto(rs));
+
+        // Вычисляем сдвиг: для 1-й страницы (1-1)*size = 0
+        int offset = (page - 1) * size; 
+
+        try (Connection conn = DbConfig.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, size);
+            pstmt.setInt(2, offset);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    users.add(mapRowToDto(rs));
+                }
             }
         }
         return users;
@@ -71,7 +78,6 @@ public class UserDao {
             
             stmt.setString(1, user.getName());
             stmt.setString(2, user.getSurname());
-            stmt.setString(3, user.getLogin());
             stmt.setString(4, user.getCode());
             
             stmt.executeUpdate();
@@ -97,7 +103,6 @@ public class UserDao {
         user.setSurname(rs.getString("surname"));
         // Извлечение TIMESTAMP как LocalDateTime
         user.setRegistrationDate(rs.getObject("registration_date", LocalDateTime.class));
-        user.setLogin(rs.getString("login"));
         return user;
     }
 }

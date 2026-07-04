@@ -11,7 +11,6 @@ public class UserDto {
     private String name;
     private String surname;
     private LocalDateTime registrationDate;
-    private String login;
 
     public String getCode() {
         return code;
@@ -43,13 +42,5 @@ public class UserDto {
 
     public void setRegistrationDate(LocalDateTime registrationDate) {
         this.registrationDate = registrationDate;
-    }
-
-    public String getLogin() {
-        return login;
-    }
-
-    public void setLogin(String login) {
-        this.login = login;
     }
 }

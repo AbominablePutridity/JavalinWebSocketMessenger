@@ -72,16 +72,24 @@ public class MessageDao {
         return null; // Сообщение не найдено
     }
 
-    // READ ALL - Получение абсолютно всех сообщений из БД
-    public List<MessageDto> findAll() throws SQLException {
-        String sql = "SELECT * FROM messages";
+    // READ ALL WITH PAGINATION - Получение сообщений с пагинацией
+    public List<MessageDto> findAll(int page, int size) throws SQLException {
+        // Добавлена сортировка ORDER BY id, чтобы сообщения не перемешивались при пагинации
+        String sql = "SELECT * FROM messages ORDER BY id LIMIT ? OFFSET ?";
         List<MessageDto> messages = new ArrayList<>();
-        try (Connection conn = DbConfig.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            while (rs.next()) {
-                messages.add(mapRowToDto(rs));
+
+        int offset = (page - 1) * size; 
+
+        try (Connection conn = DbConfig.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, size);
+            pstmt.setInt(2, offset);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    messages.add(mapRowToDto(rs));
+                }
             }
         }
         return messages;

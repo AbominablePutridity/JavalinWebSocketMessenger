@@ -47,16 +47,24 @@ public class ChannelDao {
         return null; // Канал не найден
     }
 
-    // READ ALL - Получение всех каналов
-    public List<ChannelDto> findAll() throws SQLException {
-        String sql = "SELECT * FROM channels";
+    // READ ALL WITH PAGINATION - Получение каналов с пагинацией
+    public List<ChannelDto> findAll(int page, int size) throws SQLException {
+        String sql = "SELECT * FROM channels LIMIT ? OFFSET ?";
         List<ChannelDto> channels = new ArrayList<>();
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            while (rs.next()) {
-                channels.add(mapRowToDto(rs));
+
+        // Вычисляем сдвиг: для 1-й страницы (1-1)*size = 0
+        int offset = (page - 1) * size; 
+
+        try (Connection conn = getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, size);
+            pstmt.setInt(2, offset);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    channels.add(mapRowToDto(rs));
+                }
             }
         }
         return channels;

@@ -69,16 +69,23 @@ public class UserChannelDao {
         return null;
     }
 
-    // READ ALL - Получение всех связей
-    public List<UserChannelDto> findAll() throws SQLException {
-        String sql = "SELECT * FROM user_channels";
+    // READ ALL WITH PAGINATION - Получение связей пользователей и каналов с пагинацией
+    public List<UserChannelDto> findAll(int page, int size) throws SQLException {
+        String sql = "SELECT * FROM user_channels LIMIT ? OFFSET ?";
         List<UserChannelDto> list = new ArrayList<>();
-        try (Connection conn = DbConfig.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            while (rs.next()) {
-                list.add(mapRowToDto(rs));
+
+        int offset = (page - 1) * size; 
+
+        try (Connection conn = DbConfig.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, size);
+            pstmt.setInt(2, offset);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRowToDto(rs));
+                }
             }
         }
         return list;
