@@ -4,27 +4,12 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/**
- * Инициализация схемы базы данных при запуске приложения.
- * Создаёт все необходимые таблицы, если их ещё нет (IF NOT EXISTS).
- * <p>
- * Вызывается один раз при старте сервера из Messenger.main().
- */
 public class DatabaseInit {
 
-    /**
-     * Создаёт все таблицы, используемые в проекте.
-     * Безопасно вызывать многократно — каждая таблица создаётся только если отсутствует.
-     *
-     * @throws SQLException если произошла ошибка при создании таблиц
-     */
     public static void createTablesIfNotExist() throws SQLException {
         try (Connection conn = DbConfig.getConnection();
              Statement stmt = conn.createStatement()) {
 
-            // ================================================================
-            // 1. Пользователи
-            // ================================================================
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS users (
                     code              VARCHAR(255) PRIMARY KEY,
@@ -35,9 +20,6 @@ public class DatabaseInit {
                 )
             """);
 
-            // ================================================================
-            // 2. Учётные данные для входа
-            // ================================================================
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS access (
                     id              BIGSERIAL PRIMARY KEY,
@@ -47,9 +29,6 @@ public class DatabaseInit {
                 )
             """);
 
-            // ================================================================
-            // 3. Каналы (с владельцем — owner_code)
-            // ================================================================
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS channels (
                     code            VARCHAR(255) PRIMARY KEY,
@@ -60,9 +39,6 @@ public class DatabaseInit {
                 )
             """);
 
-            // ================================================================
-            // 4. Связь пользователей с каналами (многие ко многим)
-            // ================================================================
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS user_channels (
                     id              BIGSERIAL PRIMARY KEY,
@@ -71,9 +47,6 @@ public class DatabaseInit {
                 )
             """);
 
-            // ================================================================
-            // 5. Сообщения
-            // ================================================================
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id              BIGSERIAL PRIMARY KEY,

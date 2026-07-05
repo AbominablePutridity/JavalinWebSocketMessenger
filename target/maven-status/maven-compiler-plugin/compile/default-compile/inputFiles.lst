@@ -1,3 +1,4 @@
+D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\controller\AuthController.java
 D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\controller\ChannelController.java
 D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\controller\MessageController.java
 D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\controller\UserController.java
@@ -14,3 +15,4 @@ D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messeng
 D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\dto\UserChannelDto.java
 D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\dto\UserDto.java
 D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\Messenger.java
+D:\JavaProjects\WebsocketMessenger\Messenger\src\main\java\com\mycompany\messenger\util\JwtService.java

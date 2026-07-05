@@ -1,4 +1,128 @@
 <!DOCTYPE html>
+<<<<<<< HEAD
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Messenger WebSocket Test</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #d4d4d4; }
+        h1, h2 { color: #569cd6; }
+        #log { background: #252526; border: 1px solid #3c3c3c; padding: 10px; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+        .msg { margin: 4px 0; }
+        .sent { color: #6a9955; }
+        .received { color: #569cd6; }
+        .error { color: #f44747; }
+        input, textarea, button { font-family: monospace; margin: 3px; }
+        textarea { width: 600px; height: 80px; }
+        button { cursor: pointer; padding: 4px 12px; }
+        .section { border: 1px solid #3c3c3c; padding: 10px; margin: 10px 0; }
+        .token-display { background: #1e1e1e; padding: 5px; border: 1px solid #3c3c3c; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>Messenger WebSocket Test (JWT Auth)</h1>
+
+    <div>
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <span id="status" style="color:red;">Disconnected</span>
+        <input type="text" id="serverUrl" value="ws://localhost:7070/websocket" size="40" />
+    </div>
+
+    <div id="tokenSection" class="section" style="display:none;">
+        <h2>Current Token</h2>
+        <div class="token-display" id="currentToken">(none)</div>
+        <div>Current User Code: <span id="currentUserCode">(none)</span></div>
+    </div>
+
+    <div class="section">
+        <h2>1. Auth</h2>
+        <div style="display:inline-block; vertical-align:top;">
+            <h3>Register</h3>
+            <input type="text" id="regLogin" placeholder="login" value="testuser" /><br/>
+            <input type="password" id="regPassword" placeholder="password" value="1234" /><br/>
+            <input type="text" id="regName" placeholder="name" value="Test" /><br/>
+            <input type="text" id="regSurname" placeholder="surname" value="User" /><br/>
+            <button onclick="register()">REGISTER</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:30px;">
+            <h3>Login</h3>
+            <input type="text" id="loginLogin" placeholder="login" value="testuser" /><br/>
+            <input type="password" id="loginPassword" placeholder="password" value="1234" /><br/>
+            <button onclick="login()">LOGIN</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>2. Channels</h2>
+        <div style="display:inline-block; vertical-align:top;">
+            <b>Create Channel</b><br/>
+            <input type="text" id="chName" placeholder="channel name" value="general" /><br/>
+            <input type="text" id="chDesc" placeholder="description" value="General chat" /><br/>
+            <button onclick="createChannel()">CREATE_CHANNEL</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:20px;">
+            <b>Search Channels</b><br/>
+            <input type="text" id="searchName" placeholder="name filter (optional)" /><br/>
+            <button onclick="searchChannels()">SEARCH_CHANNELS</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:20px;">
+            <b>Update Channel</b><br/>
+            <input type="text" id="updCode" placeholder="channel code" size="40" /><br/>
+            <input type="text" id="updName" placeholder="new name" /><br/>
+            <input type="text" id="updDesc" placeholder="new description" /><br/>
+            <button onclick="updateChannel()">UPDATE_CHANNEL</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:20px;">
+            <b>Delete Channel</b><br/>
+            <input type="text" id="delCode" placeholder="channel code" size="40" /><br/>
+            <button onclick="deleteChannel()">DELETE_CHANNEL</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>3. Members</h2>
+        <b>Add Member to Channel</b><br/>
+        <input type="text" id="addChCode" placeholder="channel code" size="40" /><br/>
+        <input type="text" id="addMemCode" placeholder="member userCode" size="40" /><br/>
+        <button onclick="addMember()">ADD_MEMBER</button>
+    </div>
+
+    <div class="section">
+        <h2>4. Messages</h2>
+        <div style="display:inline-block; vertical-align:top;">
+            <b>Send Message</b><br/>
+            <input type="text" id="msgChCode" placeholder="channel code" size="40" /><br/>
+            <input type="text" id="msgText" placeholder="text" size="50" value="Hello!" /><br/>
+            <button onclick="createMessage()">CREATE_MESSAGE</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:20px;">
+            <b>Update Message</b><br/>
+            <input type="text" id="updMsgId" placeholder="message id" /><br/>
+            <input type="text" id="updMsgText" placeholder="new text" /><br/>
+            <button onclick="updateMessage()">UPDATE_MESSAGE</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:20px;">
+            <b>Delete Message</b><br/>
+            <input type="text" id="delMsgId" placeholder="message id" /><br/>
+            <button onclick="deleteMessage()">DELETE_MESSAGE</button>
+        </div>
+        <div style="display:inline-block; vertical-align:top; margin-left:20px;">
+            <b>Search Messages</b><br/>
+            <input type="text" id="srchMsgCh" placeholder="channel code" size="40" /><br/>
+            <input type="text" id="srchMsgText" placeholder="text filter (optional)" /><br/>
+            <button onclick="searchMessages()">SEARCH_MESSAGES</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>5. Custom</h2>
+        <textarea id="customMsg" placeholder='{"action":"...", "userCode":"...", "payload":{...}}'></textarea><br/>
+        <button onclick="sendCustom()">Send</button>
+    </div>
+
+    <h2>Log</h2>
+=======
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -76,10 +200,183 @@
     <button onclick="searchMessages()">Искать</button>
 
     <h2>📋 Лог</h2>
+>>>>>>> main
     <div id="log"></div>
 
     <script>
         let ws = null;
+<<<<<<< HEAD
+        let token = null;
+        let userCode = null;
+
+        function log(msg, type) {
+            const el = document.getElementById('log');
+            const div = document.createElement('div');
+            div.className = 'msg ' + (type || '');
+            div.textContent = msg;
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function connect() {
+            if (ws) { log('Already connected', 'error'); return; }
+            const url = document.getElementById('serverUrl').value;
+            try {
+                ws = new WebSocket(url);
+                ws.onopen = () => {
+                    document.getElementById('status').textContent = 'Connected';
+                    document.getElementById('status').style.color = 'green';
+                    log('Connected to ' + url, 'sent');
+                };
+                ws.onclose = () => {
+                    document.getElementById('status').textContent = 'Disconnected';
+                    document.getElementById('status').style.color = 'red';
+                    log('Disconnected', 'error');
+                    ws = null;
+                };
+                ws.onerror = (e) => {
+                    log('WebSocket error', 'error');
+                };
+                ws.onmessage = (e) => {
+                    log('<<< ' + e.data, 'received');
+                    try {
+                        const resp = JSON.parse(e.data);
+                        if (resp.status === 'SUCCESS' && resp.payload) {
+                            if (resp.payload.token) {
+                                token = resp.payload.token;
+                                userCode = resp.payload.userCode;
+                                document.getElementById('currentToken').textContent = token;
+                                document.getElementById('currentUserCode').textContent = userCode;
+                                document.getElementById('tokenSection').style.display = 'block';
+                                log('Token saved!', 'sent');
+                            }
+                        }
+                    } catch (ex) {}
+                };
+            } catch (e) {
+                log('Connection error: ' + e.message, 'error');
+            }
+        }
+
+        function disconnect() {
+            if (ws) { ws.close(); ws = null; }
+        }
+
+        function send(obj) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected!', 'error');
+                return;
+            }
+            if (token) {
+                obj.token = token;
+            }
+            const str = JSON.stringify(obj, null, 2);
+            log('>>> ' + str, 'sent');
+            ws.send(str);
+        }
+
+        // Auth
+        function register() {
+            send({
+                action: 'REGISTER',
+                login: document.getElementById('regLogin').value,
+                password: document.getElementById('regPassword').value,
+                name: document.getElementById('regName').value,
+                surname: document.getElementById('regSurname').value
+            });
+        }
+
+        function login() {
+            send({
+                action: 'LOGIN',
+                login: document.getElementById('loginLogin').value,
+                password: document.getElementById('loginPassword').value
+            });
+        }
+
+        // Channels
+        function createChannel() {
+            send({
+                action: 'CREATE_CHANNEL',
+                name: document.getElementById('chName').value,
+                description: document.getElementById('chDesc').value
+            });
+        }
+
+        function searchChannels() {
+            send({
+                action: 'SEARCH_CHANNELS',
+                name: document.getElementById('searchName').value
+            });
+        }
+
+        function updateChannel() {
+            send({
+                action: 'UPDATE_CHANNEL',
+                code: document.getElementById('updCode').value,
+                name: document.getElementById('updName').value,
+                description: document.getElementById('updDesc').value
+            });
+        }
+
+        function deleteChannel() {
+            send({
+                action: 'DELETE_CHANNEL',
+                code: document.getElementById('delCode').value
+            });
+        }
+
+        // Members
+        function addMember() {
+            send({
+                action: 'ADD_MEMBER',
+                channelCode: document.getElementById('addChCode').value,
+                memberCode: document.getElementById('addMemCode').value
+            });
+        }
+
+        // Messages
+        function createMessage() {
+            send({
+                action: 'CREATE_MESSAGE',
+                channelCode: document.getElementById('msgChCode').value,
+                text: document.getElementById('msgText').value
+            });
+        }
+
+        function updateMessage() {
+            send({
+                action: 'UPDATE_MESSAGE',
+                messageId: parseInt(document.getElementById('updMsgId').value),
+                text: document.getElementById('updMsgText').value
+            });
+        }
+
+        function deleteMessage() {
+            send({
+                action: 'DELETE_MESSAGE',
+                messageId: parseInt(document.getElementById('delMsgId').value)
+            });
+        }
+
+        function searchMessages() {
+            send({
+                action: 'SEARCH_MESSAGES',
+                channelCode: document.getElementById('srchMsgCh').value,
+                text: document.getElementById('srchMsgText').value
+            });
+        }
+
+        // Custom
+        function sendCustom() {
+            const val = document.getElementById('customMsg').value;
+            try {
+                const obj = JSON.parse(val);
+                send(obj);
+            } catch (e) {
+                log('Invalid JSON: ' + e.message, 'error');
+            }
+=======
 
         function log(msg, cls = 'info') {
             const el = document.getElementById('log');
@@ -220,6 +517,7 @@
             }
             const text = document.getElementById('searchMsgText').value;
             sendToWs('SEARCH_MESSAGES', { channelCode, text, page: 1, size: 20 });
+>>>>>>> main
         }
     </script>
 </body>
