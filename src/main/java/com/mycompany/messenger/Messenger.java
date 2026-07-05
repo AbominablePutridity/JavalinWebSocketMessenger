@@ -1,45 +1,95 @@
 package com.mycompany.messenger;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mycompany.messenger.controller.AuthController;
+import com.mycompany.messenger.controller.ChannelController;
+import com.mycompany.messenger.controller.MessageController;
+import com.mycompany.messenger.dao.DatabaseInit;
+import com.mycompany.messenger.util.JwtService;
 import io.javalin.Javalin;
 
-/**
- *
- * @author User
- */
 public class Messenger {
 
-    public static void main(String[] args) {
+    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
-        // В Javalin 7 ВСЁ настраивается внутри create()
+    public static void main(String[] args) throws Exception {
+        DatabaseInit.createTablesIfNotExist();
+
+        AuthController authController = new AuthController();
+        ChannelController channelController = new ChannelController();
+        MessageController messageController = new MessageController();
+        JwtService jwtService = authController.getJwtService();
+
         Javalin app = Javalin.create(config -> {
-            
-            // 1. Настройка CORS (для Javalin 6 и 7)
             config.bundledPlugins.enableCors(cors -> {
                 cors.addRule(it -> it.anyHost());
             });
 
-            // 2. Настройка Вебсокета (теперь через config.routes)
             config.routes.ws("/websocket", ws -> {
-                
                 ws.onConnect(ctx -> {
-                    System.out.println("Клиент подключился: " + ctx.sessionId());
-                    ctx.send("Привет от сервера Javalin 7!");
+                    System.out.println("Client connected: " + ctx.sessionId());
                 });
 
                 ws.onMessage(ctx -> {
-                    System.out.println("Получено: " + ctx.message());
-                    ctx.send("Сервер получил: " + ctx.message());
+                    try {
+                        String msg = ctx.message();
+                        System.out.println("Received: " + msg);
+
+                        ObjectNode json = MAPPER.readValue(msg, ObjectNode.class);
+                        String action = json.has("action") ? json.get("action").asText().toUpperCase() : "";
+
+                        if ("REGISTER".equals(action) || "LOGIN".equals(action)) {
+                            String response = authController.handleAction(action, json);
+                            ctx.send(response);
+                            return;
+                        }
+
+                        String userCode = null;
+                        if (json.has("token")) {
+                            userCode = jwtService.validateToken(json.get("token").asText());
+                        }
+                        if (userCode == null && json.has("userCode")) {
+                            userCode = json.get("userCode").asText();
+                        }
+                        if (userCode == null || userCode.isEmpty()) {
+                            ObjectNode error = MAPPER.createObjectNode();
+                            error.put("action", action);
+                            error.put("status", "ERROR");
+                            error.put("error", "Требуется аутентификация (token или userCode)");
+                            ctx.send(error.toString());
+                            return;
+                        }
+
+                        String response;
+                        if (action.contains("MESSAGE")) {
+                            response = messageController.handleAction(action, userCode, json);
+                        } else {
+                            response = channelController.handleAction(action, userCode, json);
+                        }
+                        ctx.send(response);
+
+                    } catch (Exception e) {
+                        System.err.println("Error handling message: " + e.getMessage());
+                        e.printStackTrace();
+                        ObjectNode error = MAPPER.createObjectNode();
+                        error.put("action", "UNKNOWN");
+                        error.put("status", "ERROR");
+                        error.put("error", "Внутренняя ошибка сервера: " + e.getMessage());
+                        ctx.send(error.toString());
+                    }
                 });
 
                 ws.onClose(ctx -> {
-                    System.out.println("Клиент отключился: " + ctx.sessionId());
+                    System.out.println("Client disconnected: " + ctx.sessionId());
                 });
 
                 ws.onError(ctx -> {
-                    System.err.println("Ошибка сессии: " + ctx.sessionId());
+                    System.err.println("Session error: " + ctx.sessionId());
                 });
             });
-        }).start(7070); // Запускаем сервер в самом конце
-        
+        }).start(7070);
+
+        System.out.println("Messenger server started on port 7070");
     }
 }

@@ -24,8 +24,8 @@ public class UserDao {
             stmt.setString(1, user.getCode());
             stmt.setString(2, user.getName());
             stmt.setString(3, user.getSurname());
-            // Конвертация LocalDateTime для JDBC
             stmt.setObject(4, user.getRegistrationDate());
+            stmt.setString(5, ""); // login хранится в таблице access, здесь — пустая строка
             
             stmt.executeUpdate();
         }
@@ -78,6 +78,7 @@ public class UserDao {
             
             stmt.setString(1, user.getName());
             stmt.setString(2, user.getSurname());
+            stmt.setString(3, ""); // login — пустая строка, т.к. хранится в access
             stmt.setString(4, user.getCode());
             
             stmt.executeUpdate();

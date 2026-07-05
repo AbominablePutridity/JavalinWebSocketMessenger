@@ -52,6 +52,22 @@ public class AccessDao {
         return null; // Доступ не найден
     }
 
+    // READ - Поиск по логину (для аутентификации)
+    public AccessDto findByLogin(String login) throws SQLException {
+        String sql = "SELECT * FROM access WHERE login = ?";
+        try (Connection conn = DbConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, login);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRowToDto(rs);
+                }
+            }
+        }
+        return null; // Логин не найден
+    }
+
     // READ - Поиск по внешнему ключу (user_code)
     public AccessDto findByUserCode(String userCode) throws SQLException {
         String sql = "SELECT * FROM access WHERE user_code = ?";
