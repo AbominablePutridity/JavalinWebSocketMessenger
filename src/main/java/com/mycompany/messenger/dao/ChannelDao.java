@@ -53,19 +53,28 @@ public class ChannelDao {
     }
 
     public List<ChannelDto> findByUserCodeAndName(String userCode, String channelName) throws SQLException {
+        return findByUserCodeAndName(userCode, channelName, 1, 1000);
+    }
+
+    public List<ChannelDto> findByUserCodeAndName(String userCode, String channelName, int page, int size) throws SQLException {
         boolean hasNameFilter = channelName != null && !channelName.trim().isEmpty();
+        int offset = (page - 1) * size;
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT c.* FROM channels c");
         sql.append(" INNER JOIN user_channels uc ON c.code = uc.channel_code");
         sql.append(" WHERE uc.user_code = ?");
         if (hasNameFilter) sql.append(" AND c.name ILIKE ?");
         sql.append(" ORDER BY c.creation_date DESC");
+        sql.append(" LIMIT ? OFFSET ?");
 
         List<ChannelDto> channels = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
-            stmt.setString(1, userCode);
-            if (hasNameFilter) stmt.setString(2, "%" + channelName.trim() + "%");
+            int idx = 1;
+            stmt.setString(idx++, userCode);
+            if (hasNameFilter) stmt.setString(idx++, "%" + channelName.trim() + "%");
+            stmt.setInt(idx++, size);
+            stmt.setInt(idx, offset);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) channels.add(mapRowToDto(rs));
             }
