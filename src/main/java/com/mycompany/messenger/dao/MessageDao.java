@@ -66,6 +66,18 @@ public class MessageDao {
         return messages;
     }
 
+    public String findChannelCodeById(long messageId) throws SQLException {
+        String sql = "SELECT uc.channel_code FROM messages m INNER JOIN user_channels uc ON m.channel_id = uc.id WHERE m.id = ?";
+        try (Connection conn = DbConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, messageId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getString("channel_code");
+            }
+        }
+        return null;
+    }
+
     public boolean update(long messageId, String newText, String userCode) throws SQLException {
         String sql = """
             UPDATE messages SET text = ? WHERE id = ?
