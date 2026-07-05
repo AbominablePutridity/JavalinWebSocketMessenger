@@ -2,124 +2,94 @@ package com.mycompany.messenger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mycompany.messenger.controller.AuthController;
 import com.mycompany.messenger.controller.ChannelController;
 import com.mycompany.messenger.controller.MessageController;
 import com.mycompany.messenger.dao.DatabaseInit;
+import com.mycompany.messenger.util.JwtService;
 import io.javalin.Javalin;
 
-/**
- * Главный класс сервера Messenger.
- * Запускает Javalin-сервер на порту 7070 с WebSocket-эндпоинтом /websocket.
- * <p>
- * Протокол сообщений WebSocket (JSON):
- * <pre>
- * Запрос клиента:  { "action": "CREATE_CHANNEL", "userCode": "...", "payload": { ... } }
- * Ответ сервера:  { "action": "CREATE_CHANNEL", "status": "SUCCESS", "payload": { ... } }
- *                 { "action": "CREATE_CHANNEL", "status": "ERROR", "error": "..." }
- * </pre>
- *
- * @author User
- */
 public class Messenger {
 
-    // ObjectMapper для парсинга входящих JSON-сообщений (поставляется с Javalin)
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .findAndRegisterModules();
+    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        DatabaseInit.createTablesIfNotExist();
 
-        // Инициализируем контроллеры
+        AuthController authController = new AuthController();
         ChannelController channelController = new ChannelController();
         MessageController messageController = new MessageController();
+        JwtService jwtService = authController.getJwtService();
 
-        // 0. Создаём таблицы БД, если их ещё нет (IF NOT EXISTS)
-        try {
-            DatabaseInit.createTablesIfNotExist();
-        } catch (Exception e) {
-            System.err.println("[DB] Ошибка при создании таблиц: " + e.getMessage());
-            System.exit(1); // без таблиц работать бесполезно
-        }
-
-        // В Javalin 7 ВСЁ настраивается внутри create()
         Javalin app = Javalin.create(config -> {
-
-            // 1. Настройка CORS — разрешаем запросы с любых хостов
             config.bundledPlugins.enableCors(cors -> {
                 cors.addRule(it -> it.anyHost());
             });
 
-            // 2. Настройка WebSocket-эндпоинта
             config.routes.ws("/websocket", ws -> {
-
-                // ----------------------------------------------------------------
-                // onConnect — вызывается при новом подключении клиента
-                // ----------------------------------------------------------------
                 ws.onConnect(ctx -> {
-                    System.out.println("[WS] Клиент подключился: " + ctx.sessionId());
+                    System.out.println("Client connected: " + ctx.sessionId());
                 });
 
-                // ----------------------------------------------------------------
-                // onMessage — вызывается при получении сообщения от клиента
-                // Ожидаем JSON вида: { "action": "...", "userCode": "...", "payload": {...} }
-                // ----------------------------------------------------------------
                 ws.onMessage(ctx -> {
-                    String rawMessage = ctx.message();
-                    System.out.println("[WS] Получено от " + ctx.sessionId() + ": " + rawMessage);
-
                     try {
-                        // Парсим входящее JSON-сообщение
-                        ObjectNode json = (ObjectNode) MAPPER.readTree(rawMessage);
+                        String msg = ctx.message();
+                        System.out.println("Received: " + msg);
 
-                        // Извлекаем обязательные поля
-                        String action = json.has("action") ? json.get("action").asText() : "";
-                        String userCode = json.has("userCode") ? json.get("userCode").asText() : "";
+                        ObjectNode json = MAPPER.readValue(msg, ObjectNode.class);
+                        String action = json.has("action") ? json.get("action").asText().toUpperCase() : "";
 
-                        // Извлекаем payload (тело запроса) — может отсутствовать
-                        ObjectNode payload = json.has("payload") && json.get("payload").isObject()
-                                ? (ObjectNode) json.get("payload")
-                                : MAPPER.createObjectNode();
-
-                        // Валидируем наличие userCode
-                        // (в будущем userCode будет извлекаться из JWT-токена)
-                        if (userCode.isEmpty()) {
-                            ctx.send("{\"action\":\"" + action
-                                    + "\",\"status\":\"ERROR\",\"error\":\"Не указан userCode\"}");
+                        if ("REGISTER".equals(action) || "LOGIN".equals(action)) {
+                            String response = authController.handleAction(action, json);
+                            ctx.send(response);
                             return;
                         }
 
-                        // Маршрутизируем запрос в нужный контроллер
-                        // Действия с сообщениями содержат "MESSAGE" в названии
+                        String userCode = null;
+                        if (json.has("token")) {
+                            userCode = jwtService.validateToken(json.get("token").asText());
+                        }
+                        if (userCode == null && json.has("userCode")) {
+                            userCode = json.get("userCode").asText();
+                        }
+                        if (userCode == null || userCode.isEmpty()) {
+                            ObjectNode error = MAPPER.createObjectNode();
+                            error.put("action", action);
+                            error.put("status", "ERROR");
+                            error.put("error", "Требуется аутентификация (token или userCode)");
+                            ctx.send(error.toString());
+                            return;
+                        }
+
                         String response;
                         if (action.contains("MESSAGE")) {
-                            response = messageController.handleAction(action, userCode, payload);
+                            response = messageController.handleAction(action, userCode, json);
                         } else {
-                            response = channelController.handleAction(action, userCode, payload);
+                            response = channelController.handleAction(action, userCode, json);
                         }
                         ctx.send(response);
 
                     } catch (Exception e) {
-                        // Если JSON не распарсился или произошла другая ошибка
-                        System.err.println("[WS] Ошибка обработки сообщения: " + e.getMessage());
-                        ctx.send("{\"action\":\"UNKNOWN\",\"status\":\"ERROR\",\"error\":\""
-                                + "Ошибка обработки запроса: " + e.getMessage().replace("\"", "'")
-                                + "\"}");
+                        System.err.println("Error handling message: " + e.getMessage());
+                        e.printStackTrace();
+                        ObjectNode error = MAPPER.createObjectNode();
+                        error.put("action", "UNKNOWN");
+                        error.put("status", "ERROR");
+                        error.put("error", "Внутренняя ошибка сервера: " + e.getMessage());
+                        ctx.send(error.toString());
                     }
                 });
 
-                // ----------------------------------------------------------------
-                // onClose — вызывается при отключении клиента
-                // ----------------------------------------------------------------
                 ws.onClose(ctx -> {
-                    System.out.println("[WS] Клиент отключился: " + ctx.sessionId());
+                    System.out.println("Client disconnected: " + ctx.sessionId());
                 });
 
-                // ----------------------------------------------------------------
-                // onError — вызывается при ошибке в сессии
-                // ----------------------------------------------------------------
                 ws.onError(ctx -> {
-                    System.err.println("[WS] Ошибка сессии: " + ctx.sessionId());
+                    System.err.println("Session error: " + ctx.sessionId());
                 });
             });
-        }).start(7070); // Запускаем сервер на порту 7070
+        }).start(7070);
+
+        System.out.println("Messenger server started on port 7070");
     }
 }
