@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 public class MessageController {
 
@@ -19,10 +20,16 @@ public class MessageController {
 
     private final MessageDao messageDao;
     private final UserChannelDao userChannelDao;
+    private final BiConsumer<String, String> pusher;
 
     public MessageController() {
+        this((targetUserCode, message) -> {});
+    }
+
+    public MessageController(BiConsumer<String, String> pusher) {
         this.messageDao = new MessageDao();
         this.userChannelDao = new UserChannelDao();
+        this.pusher = pusher;
     }
 
     public String handleAction(String action, String userCode, ObjectNode payload) {
@@ -33,6 +40,19 @@ public class MessageController {
             case "SEARCH_MESSAGES" -> handleSearchMessages(userCode, payload);
             default -> buildError(action, "Неизвестный тип действия: " + action);
         };
+    }
+
+    private void broadcastToChannel(String channelCode, String excludeUserCode, String message) {
+        try {
+            List<UserChannelDto> members = userChannelDao.findAllByChannelCode(channelCode);
+            for (UserChannelDto uc : members) {
+                if (!uc.getUserCode().equals(excludeUserCode)) {
+                    pusher.accept(uc.getUserCode(), message);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Broadcast error: " + e.getMessage());
+        }
     }
 
     private String handleCreateMessage(String userCode, ObjectNode payload) {
@@ -61,6 +81,14 @@ public class MessageController {
             payloadResponse.put("dateSend", message.getDateSend().toString());
             payloadResponse.put("channelCode", channelCode);
             payloadResponse.put("userCode", userCode);
+
+            // Push NEW_MESSAGE всем участникам канала (кроме отправителя)
+            ObjectNode pushMsg = MAPPER.createObjectNode();
+            pushMsg.put("action", "NEW_MESSAGE");
+            pushMsg.set("payload", payloadResponse.deepCopy());
+            String pushStr = pushMsg.toString();
+            broadcastToChannel(channelCode, userCode, pushStr);
+
             return buildSuccess("CREATE_MESSAGE", payloadResponse);
         } catch (Exception e) {
             return buildError("CREATE_MESSAGE", "Ошибка при отправке сообщения: " + e.getMessage());
@@ -77,11 +105,26 @@ public class MessageController {
                 return buildError("UPDATE_MESSAGE", "Текст сообщения не может быть пустым");
             String newText = payload.get("text").asText().trim();
 
+            // Находим channelCode по messageId через messageDao
+            String channelCode = messageDao.findChannelCodeById(messageId);
+            if (channelCode == null) {
+                return buildError("UPDATE_MESSAGE", "Сообщение не найдено");
+            }
+
             boolean updated = messageDao.update(messageId, newText, userCode);
             if (updated) {
                 ObjectNode payloadResponse = MAPPER.createObjectNode();
                 payloadResponse.put("id", messageId);
                 payloadResponse.put("text", newText);
+                payloadResponse.put("channelCode", channelCode);
+                payloadResponse.put("userCode", userCode);
+
+                // Push MESSAGE_UPDATED всем участникам (кроме отправителя)
+                ObjectNode pushMsg = MAPPER.createObjectNode();
+                pushMsg.put("action", "MESSAGE_UPDATED");
+                pushMsg.set("payload", payloadResponse.deepCopy());
+                broadcastToChannel(channelCode, userCode, pushMsg.toString());
+
                 return buildSuccess("UPDATE_MESSAGE", payloadResponse);
             } else {
                 return buildError("UPDATE_MESSAGE", "Сообщение не найдено или вы не являетесь его автором");
@@ -97,11 +140,25 @@ public class MessageController {
                 return buildError("DELETE_MESSAGE", "Не указан ID сообщения (messageId)");
             long messageId = payload.get("messageId").asLong();
 
+            // Находим channelCode до удаления
+            String channelCode = messageDao.findChannelCodeById(messageId);
+            if (channelCode == null) {
+                return buildError("DELETE_MESSAGE", "Сообщение не найдено");
+            }
+
             boolean deleted = messageDao.delete(messageId, userCode);
             if (deleted) {
                 ObjectNode payloadResponse = MAPPER.createObjectNode();
                 payloadResponse.put("message", "Сообщение успешно удалено");
                 payloadResponse.put("id", messageId);
+                payloadResponse.put("channelCode", channelCode);
+
+                // Push MESSAGE_DELETED всем участникам (кроме отправителя)
+                ObjectNode pushMsg = MAPPER.createObjectNode();
+                pushMsg.put("action", "MESSAGE_DELETED");
+                pushMsg.set("payload", payloadResponse.deepCopy());
+                broadcastToChannel(channelCode, userCode, pushMsg.toString());
+
                 return buildSuccess("DELETE_MESSAGE", payloadResponse);
             } else {
                 return buildError("DELETE_MESSAGE", "Сообщение не найдено или вы не являетесь его автором");

@@ -98,6 +98,16 @@ public class UserChannelDao {
         }
     }
 
+    public void deleteByUserCodeAndChannelCode(String userCode, String channelCode) throws SQLException {
+        String sql = "DELETE FROM user_channels WHERE user_code = ? AND channel_code = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, userCode);
+            stmt.setString(2, channelCode);
+            stmt.executeUpdate();
+        }
+    }
+
     public void deleteByChannelCode(String channelCode) throws SQLException {
         String sql = "DELETE FROM user_channels WHERE channel_code = ?";
         try (Connection conn = getConnection();
