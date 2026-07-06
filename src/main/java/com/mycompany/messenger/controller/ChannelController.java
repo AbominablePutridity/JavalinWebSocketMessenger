@@ -106,6 +106,7 @@ public class ChannelController {
         }
     }
 
+    // удаление канала
     private String handleDeleteChannel(String userCode, ObjectNode payload) {
         try {
             if (!payload.has("code") || payload.get("code").asText().isEmpty())
@@ -145,6 +146,7 @@ public class ChannelController {
         }
     }
 
+    // обновление канала
     private String handleUpdateChannel(String userCode, ObjectNode payload) {
         try {
             if (!payload.has("code") || payload.get("code").asText().isEmpty())
