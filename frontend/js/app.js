@@ -92,6 +92,9 @@ function handleLogin() {
                 // Сохраняем токен и данные пользователя
                 Api.token = response.payload.token;
                 Api.userCode = response.payload.userCode;
+                Api.login = login;
+                Api.password = password;
+                Api._authenticated = true;
 
                 localStorage.setItem('messenger_token', Api.token);
                 localStorage.setItem('messenger_userCode', Api.userCode);
@@ -131,6 +134,9 @@ function handleRegister() {
                 Api.userCode = response.payload.userCode;
                 Api.userName = response.payload.name;
                 Api.userSurname = response.payload.surname || '';
+                Api.login = login;
+                Api.password = password;
+                Api._authenticated = true;
 
                 localStorage.setItem('messenger_token', Api.token);
                 localStorage.setItem('messenger_userCode', Api.userCode);
@@ -177,6 +183,9 @@ function showMainPage() {
 
     // Подписываемся на push-события
     Api.onPush = handlePushEvent;
+
+    // Обработчик восстановления сессии после переподключения
+    Api.onReconnect = handleReconnect;
 
     // Загружаем список каналов
     loadChannels();
@@ -878,6 +887,36 @@ function logout() {
 // ========================================
 // ФОРМАТИРОВАНИЕ ДАТЫ
 // ========================================
+
+// ========================================
+// ВОССТАНОВЛЕНИЕ ПОСЛЕ ПЕРЕПОДКЛЮЧЕНИЯ
+// ========================================
+
+function handleReconnect() {
+    if (!Api.login || !Api.password) {
+        showAuthError('Ошибка восстановления соединения');
+        logout();
+        return;
+    }
+
+    Api.send({
+        action: 'LOGIN',
+        login: Api.login,
+        password: Api.password
+    }, function(response) {
+        if (response.status === 'SUCCESS') {
+            Api.token = response.payload.token;
+            Api._authenticated = true;
+            loadChannels();
+            if (AppState.currentChannel) {
+                selectChannel(AppState.currentChannel);
+            }
+        } else {
+            showAuthError('Сессия истекла, выполните вход заново');
+            logout();
+        }
+    });
+}
 
 // ========================================
 // PUSH-СОБЫТИЯ (полученные от сервера без запроса)
