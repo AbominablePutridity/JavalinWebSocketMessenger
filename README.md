@@ -242,6 +242,92 @@ Messenger/
 - **Секретный ключ генерируется при каждом запуске сервера** — все токены становятся невалидными после перезапуска.
 - На фронтенде `login` и `password` хранятся **только в памяти** (для восстановления сессии после разрыва WebSocket). На диск они никогда не пишутся.
 
+### 3.5. Push-механизм (как сервер находит нужные WebSocket'ы)
+
+Сервер отслеживает активные WebSocket-соединения через две `ConcurrentHashMap` в `Messenger.java`:
+
+```
+userContexts:  { userCode → WsContext }     // userCode → его WebSocket-сессия
+sessionToUser: { sessionId → userCode }     // обратная карта для очистки при отключении
+```
+
+Когда пользователь отправляет первый запрос с токеном (после логина), сервер регистрирует его:
+
+```java
+userContexts.put(userCode, ctx);
+sessionToUser.put(ctx.sessionId, userCode);
+```
+
+При отправке сообщения push-доставка работает в 3 шага:
+
+**Шаг 1. Запрос в БД.** `MessageController.broadcastToChannel()` делает:
+```sql
+SELECT * FROM user_channels WHERE channel_code = 'uuid-канала'
+```
+Получает список всех `userCode`, кто состоит в канале.
+
+**Шаг 2. Обход участников.** Для каждого `userCode` (кроме отправителя) вызывается `pusher.accept(userCode, message)`.
+
+**Шаг 3. Поиск сессии и отправка.** `pusher` (BiConsumer из `Messenger.java`) делает lookup в `userContexts`:
+```java
+WsContext ctx = userContexts.get(targetUserCode);
+if (ctx != null && ctx.session.isOpen()) {
+    ctx.send(message);
+}
+```
+
+То есть сервер **не перебирает все WebSocket-соединения**, а сначала идёт в БД за списком участников канала, потом для каждого делает lookup в `HashMap` — **O(1)** на поиск сессии. Это эффективно даже для тысяч каналов.
+
+### 3.6. Heartbeat и восстановление соединения
+
+**Почему соединение рвалось.** Прокси-серверы, балансировщики нагрузки и корпоративные файрволы обрывают TCP-соединения, по которым долго нет данных. Типичный таймаут — 60-120 секунд. Если в канале никто не пишет, WebSocket «молчит» и через минуту-две соединение обрывается.
+
+**Решение — Heartbeat (PING).** Клиент отправляет `{"action":"PING"}` каждые 30 секунд. Это держит соединение живым:
+
+```javascript
+Api._startHeartbeat = function() {
+    setInterval(function() {
+        ws.send(JSON.stringify({ action: 'PING' }));
+    }, 30000);
+};
+```
+
+Сервер просто игнорирует PING — ему достаточно самого факта получения данных по TCP.
+
+**Что если соединение всё-таки оборвалось.** Сеть нестабильна, сервер перезагрузился, пользователь ушёл в лифт — WebSocket может разорваться в любой момент. Решение — **автоматический реконнект с экспоненциальной задержкой**:
+
+```javascript
+Api._tryReconnect = function() {
+    // delay = 1000ms × 1.5^(attempt-1), максимум 30s
+    // до 20 попыток
+    setTimeout(function() {
+        Api._createWebSocket(url, function() {
+            Api.onReconnect();  // реавторизация
+        });
+    }, delay);
+};
+```
+
+После восстановления WebSocket клиент автоматически реавторизуется — отправляет `LOGIN` с сохранёнными в памяти логином и паролем, получает новый JWT и продолжает работу:
+
+```javascript
+App.handleReconnect = function() {
+    Api.send({ action: 'LOGIN', login, password }, function(response) {
+        Api.token = response.payload.token;
+        Channels.load();
+        if (AppState.currentChannel) App.selectChannel(AppState.currentChannel);
+    });
+};
+```
+
+Логин и пароль хранятся **только в памяти** (`Api.login`, `Api.password`), никогда не пишутся на диск. Это безопасно и позволяет восстанавливать сессию без участия пользователя.
+
+**Итог по надёжности соединения:**
+1. Heartbeat каждые 30 с → соединение не протухает на прокси
+2. Если разорвали → автоматические попытки переподключения (20 попыток, до 30 с между ними)
+3. После восстановления → автоматическая реавторизация через `LOGIN`
+4. Если не удалось за 20 попыток → показывается форма входа
+
 ---
 
 ## 4. База данных
