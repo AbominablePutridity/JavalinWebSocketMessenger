@@ -56,6 +56,20 @@ public class DatabaseInit {
                 )
             """);
 
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS files (
+                    id              BIGSERIAL PRIMARY KEY,
+                    file_name       VARCHAR(255) NOT NULL,
+                    stored_name     VARCHAR(255) NOT NULL,
+                    file_path       VARCHAR(1000) NOT NULL,
+                    file_size       BIGINT NOT NULL,
+                    file_type       VARCHAR(255),
+                    message_id      BIGINT REFERENCES messages(id) ON DELETE CASCADE,
+                    upload_date     TIMESTAMP NOT NULL,
+                    user_code       VARCHAR(255) NOT NULL REFERENCES users(code)
+                )
+            """);
+
             System.out.println("[DB] Все таблицы успешно созданы/проверены");
         }
     }

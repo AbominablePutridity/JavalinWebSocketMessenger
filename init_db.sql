@@ -55,6 +55,19 @@ CREATE TABLE messages (
     channel_id      BIGINT NOT NULL REFERENCES user_channels(id) -- ссылка на связь пользователь-канал
 );
 
+-- Файлы (прикреплённые к сообщениям)
+CREATE TABLE files (
+    id              BIGSERIAL PRIMARY KEY,              -- автоинкрементный ID
+    file_name       VARCHAR(255) NOT NULL,               -- оригинальное имя файла
+    stored_name     VARCHAR(255) NOT NULL,               -- имя на диске (UUID)
+    file_path       VARCHAR(1000) NOT NULL,              -- полный путь на диске
+    file_size       BIGINT NOT NULL,                     -- размер в байтах
+    file_type       VARCHAR(255),                        -- MIME-тип
+    message_id      BIGINT REFERENCES messages(id) ON DELETE CASCADE, -- сообщение, к которому прикреплён
+    upload_date     TIMESTAMP NOT NULL,                  -- дата загрузки
+    user_code       VARCHAR(255) NOT NULL REFERENCES users(code) -- кто загрузил
+);
+
 -- ============================================================
 -- 2. Заполнение тестовыми данными
 -- ============================================================

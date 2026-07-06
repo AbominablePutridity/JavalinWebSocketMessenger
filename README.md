@@ -122,6 +122,7 @@ Messenger/
 │   │   ├── AuthController.java        # REGISTER / LOGIN
 │   │   ├── ChannelController.java     # Управление каналами
 │   │   ├── MessageController.java     # Сообщения
+│   │   ├── FilesController.java       # Загрузка/скачивание файлов (REST HTTP)
 │   │   └── UserController.java        # Заглушка (не реализован)
 │   ├── dao/
 │   │   ├── DbConfig.java              # Подключение к PostgreSQL
@@ -130,13 +131,15 @@ Messenger/
 │   │   ├── AccessDao.java             # access (логины/пароли)
 │   │   ├── ChannelDao.java            # channels
 │   │   ├── UserChannelDao.java        # user_channels (M:N)
-│   │   └── MessageDao.java            # messages
+│   │   ├── MessageDao.java            # messages
+│   │   └── FileDao.java              # files
 │   ├── dto/
 │   │   ├── UserDto.java               # Пользователь
 │   │   ├── AccessDto.java             # Учётные данные
 │   │   ├── ChannelDto.java            # Канал
 │   │   ├── UserChannelDto.java        # Связь пользователь-канал
-│   │   └── MessageDto.java            # Сообщение
+│   │   ├── MessageDto.java            # Сообщение
+│   │   └── FileDto.java              # Файл
 │   └── util/
 │       └── JwtService.java            # Генерация/валидация JWT (HS256)
 │
@@ -366,6 +369,23 @@ App.handleReconnect = function() {
 │ text             │
 │ date_send        │
 │ channel_id (FK)──┤──► user_channels:id
+└────────┬─────────┘
+         │
+         │ 1
+         │
+         │ N
+┌────────┴─────────┐
+│      files       │
+├──────────────────┤
+│ id (PK)          │
+│ file_name        │
+│ stored_name      │
+│ file_path        │
+│ file_size        │
+│ file_type        │
+│ message_id (FK)──┤──► messages:id
+│ upload_date      │
+│ user_code (FK)───┤──► users:code
 └──────────────────┘
 ```
 
@@ -378,6 +398,7 @@ App.handleReconnect = function() {
 | `channels` | Каналы чата | `code` (UUID), `name`, `description`, `owner_code` → users |
 | `user_channels` | Связь M:N | `user_code` → users, `channel_code` → channels (CASCADE) |
 | `messages` | Сообщения | `text`, `date_send`, `channel_id` → user_channels (CASCADE) |
+| `files` | Файлы, прикреплённые к сообщениям | `file_name`, `stored_name` (UUID), `file_path`, `file_size`, `file_type`, `message_id` → messages (CASCADE), `user_code` → users |
 
 ### 4.3. Особенности
 
@@ -455,10 +476,33 @@ BiConsumer<String, String> pusher = (targetUserCode, message) -> {
 - **GET_CHANNEL_MEMBERS**: список всех участников с именами
 
 #### MessageController
-- **CREATE_MESSAGE**: проверяет членство → создаёт сообщение → push `NEW_MESSAGE` всем, кроме отправителя
+- **CREATE_MESSAGE**: проверяет членство → создаёт сообщение → привязывает файлы (`fileIds`) → push `NEW_MESSAGE` всем, кроме отправителя
 - **UPDATE_MESSAGE**: только автор → push `MESSAGE_UPDATED`
-- **DELETE_MESSAGE**: только автор → push `MESSAGE_DELETED`
-- **SEARCH_MESSAGES**: по каналу + опциональный текст (ILIKE) + пагинация, маппит `user_channels.id` → `userCode`
+- **DELETE_MESSAGE**: только автор → удаляет файлы с диска → удаляет запись из БД (CASCADE удаляет записи `files`) → push `MESSAGE_DELETED`
+- **SEARCH_MESSAGES**: по каналу + опциональный текст (ILIKE) + пагинация, маппит `user_channels.id` → `userCode`, включает `files` для каждого сообщения
+
+#### FilesController (REST HTTP)
+Контроллер для загрузки, скачивания и удаления файлов. Работает через **HTTP**, а не WebSocket, так как бинарные данные неэффективно передавать через WebSocket-JSON.
+
+- **POST `/api/files/upload`** — загрузка файла (multipart/form-data). Принимает поле `file` + `token`. Сохраняет файл в `./uploads/` с UUID-именем. Возвращает `{ id, fileName, fileSize, fileType }`.
+- **GET `/api/files/{fileId}`** — скачивание файла. Параметр `?token=...`. Проверяет членство в канале (через message → channel). Отдаёт файл с заголовком `Content-Disposition: attachment`.
+- **GET `/api/files/by-message/{messageId}`** — список файлов сообщения. Параметр `?token=...`. Возвращает массив `{ id, fileName, fileSize, fileType }`.
+- **DELETE `/api/files/{fileId}`** — удаление файла (только автор). Параметр `?token=...`. Удаляет с диска и из БД.
+
+**Поток загрузки файла:**
+```
+1. Клиент выбирает файлы → upload каждого через POST /api/files/upload
+2. Сервер сохраняет файл на диск (./uploads/uuid_originalname.ext)
+3. Сервер создаёт запись в БД files с message_id = null
+4. Клиент получает fileId → отправляет CREATE_MESSAGE с fileIds: [1,2,3]
+5. Сервер обновляет files SET message_id = ? WHERE id IN (1,2,3)
+6. В ответе и push-событии NEW_MESSAGE появляется поле files: [{id, fileName, ...}]
+```
+
+**Удаление файлов при удалении сообщения:**
+1. `MessageController.handleDeleteMessage` → запрашивает `fileDao.findByMessageId(messageId)`
+2. Удаляет каждый физический файл: `Files.deleteIfExists(path)`
+3. Вызывает `messageDao.delete()` — CASCADE удаляет записи из таблицы `files`
 
 ### 5.4. DAO-слой (raw JDBC)
 
@@ -586,6 +630,8 @@ DOMContentLoaded → showAuthPage()
 
 - Отображает сообщения в выбранном канале.
 - **Отправка**: Enter или кнопка "Отправить". Shift+Enter — новая строка.
+- **Прикрепление файлов**: кнопка 📎 открывает системный диалог выбора файлов (multiple). Перед отправкой сообщения все выбранные файлы загружаются через `POST /api/files/upload`, затем `CREATE_MESSAGE` отправляется с массивом `fileIds`.
+- **Отображение файлов**: под текстом сообщения выводятся ссылки на скачивание с иконкой 📎, именем файла и размером.
 - **Редактирование**: ✎ → prompt → `UPDATE_MESSAGE`.
 - **Удаление**: ✕ → confirm → `DELETE_MESSAGE`.
 - **Пагинация**: ← 1 → (серверная, 50 сообщений на страницу).
