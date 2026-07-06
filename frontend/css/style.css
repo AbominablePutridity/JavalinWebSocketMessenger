@@ -125,6 +125,7 @@ body {
 .header {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     padding: 10px 20px;
     background: #2d2d2d;
     border-bottom: 1px solid #3c3c3c;
@@ -145,7 +146,10 @@ body {
 .header-usercode {
     color: #569cd6;
     font-size: 12px;
-    word-break: break-all;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 250px;
 }
 
 .theme-btn {
@@ -1044,4 +1048,83 @@ body.light-theme ::-webkit-scrollbar-thumb {
 
 body.light-theme ::-webkit-scrollbar-thumb:hover {
     background: #aaa;
+}
+
+/* ============================================ */
+/* АДАПТАЦИЯ ПОД МОБИЛЬНЫЕ УСТРОЙСТВА           */
+/* ============================================ */
+
+@media (max-width: 768px) {
+    .header {
+        gap: 6px;
+        padding: 6px 10px;
+    }
+
+    .header-user {
+        margin-left: 0;
+        font-size: 12px;
+    }
+
+    .header-usercode {
+        max-width: 100%;
+        width: 100%;
+        font-size: 11px;
+    }
+
+    .header-title {
+        font-size: 16px;
+    }
+
+    .theme-btn {
+        padding: 4px 10px;
+        font-size: 14px;
+    }
+
+    .logout-btn {
+        padding: 4px 12px;
+        font-size: 13px;
+    }
+
+    .content {
+        flex-direction: column;
+    }
+
+    .left-panel {
+        width: 100%;
+        min-width: 0;
+        max-height: 35vh;
+        border-right: none;
+        border-bottom: 1px solid #3c3c3c;
+        padding: 10px;
+    }
+
+    body.light-theme .left-panel {
+        border-bottom-color: #ddd;
+    }
+
+    .right-panel {
+        min-height: 0;
+    }
+
+    .messages-container {
+        padding: 10px;
+    }
+
+    .message-input-area {
+        padding: 8px;
+    }
+
+    .message-input {
+        height: 38px;
+        font-size: 13px;
+    }
+
+    .send-btn {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .channel-info-panel {
+        padding: 12px;
+    }
 }
