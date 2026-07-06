@@ -3,11 +3,15 @@ package com.mycompany.messenger.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mycompany.messenger.dao.FileDao;
 import com.mycompany.messenger.dao.MessageDao;
 import com.mycompany.messenger.dao.UserChannelDao;
+import com.mycompany.messenger.dto.FileDto;
 import com.mycompany.messenger.dto.MessageDto;
 import com.mycompany.messenger.dto.UserChannelDto;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +24,7 @@ public class MessageController {
 
     private final MessageDao messageDao;
     private final UserChannelDao userChannelDao;
+    private final FileDao fileDao;
     private final BiConsumer<String, String> pusher;
 
     public MessageController() {
@@ -29,6 +34,7 @@ public class MessageController {
     public MessageController(BiConsumer<String, String> pusher) {
         this.messageDao = new MessageDao();
         this.userChannelDao = new UserChannelDao();
+        this.fileDao = new FileDao();
         this.pusher = pusher;
     }
 
@@ -61,9 +67,7 @@ public class MessageController {
                 return buildError("CREATE_MESSAGE", "Не указан код канала (channelCode)");
             String channelCode = payload.get("channelCode").asText();
 
-            if (!payload.has("text") || payload.get("text").asText().trim().isEmpty())
-                return buildError("CREATE_MESSAGE", "Текст сообщения не может быть пустым");
-            String text = payload.get("text").asText().trim();
+            String text = payload.has("text") ? payload.get("text").asText().trim() : "";
 
             UserChannelDto userChannel = userChannelDao.findByUserCodeAndChannelCode(userCode, channelCode);
             if (userChannel == null)
@@ -75,12 +79,25 @@ public class MessageController {
             message.setChannelId(userChannel.getId());
             messageDao.save(message);
 
+            // Привязываем файлы к сообщению, если они были переданы
+            if (payload.has("fileIds")) {
+                var fileIds = payload.get("fileIds");
+                for (var idNode : fileIds) {
+                    long fileId = idNode.asLong();
+                    fileDao.updateMessageId(fileId, message.getId());
+                }
+            }
+
+            // Загружаем файлы для ответа
+            List<FileDto> files = fileDao.findByMessageId(message.getId());
+
             ObjectNode payloadResponse = MAPPER.createObjectNode();
             payloadResponse.put("id", message.getId());
             payloadResponse.put("text", message.getText());
             payloadResponse.put("dateSend", message.getDateSend().toString());
             payloadResponse.put("channelCode", channelCode);
             payloadResponse.put("userCode", userCode);
+            payloadResponse.set("files", filesToArray(files));
 
             // Push NEW_MESSAGE всем участникам канала (кроме отправителя)
             ObjectNode pushMsg = MAPPER.createObjectNode();
@@ -146,8 +163,19 @@ public class MessageController {
                 return buildError("DELETE_MESSAGE", "Сообщение не найдено");
             }
 
+            // Удаляем физические файлы с диска перед удалением сообщения
+            List<FileDto> attachedFiles = fileDao.findByMessageId(messageId);
+            for (FileDto f : attachedFiles) {
+                try {
+                    Files.deleteIfExists(Paths.get(f.getFilePath()));
+                } catch (Exception e) {
+                    System.err.println("Ошибка удаления файла с диска: " + e.getMessage());
+                }
+            }
+
             boolean deleted = messageDao.delete(messageId, userCode);
             if (deleted) {
+                // messageDao.delete сработал — CASCADE удалит записи files из БД
                 ObjectNode payloadResponse = MAPPER.createObjectNode();
                 payloadResponse.put("message", "Сообщение успешно удалено");
                 payloadResponse.put("id", messageId);
@@ -185,6 +213,17 @@ public class MessageController {
                 userChannelToUserCode.put(uc.getId(), uc.getUserCode());
             }
 
+            // Загружаем файлы для всех сообщений одним запросом
+            List<Long> msgIds = messages.stream().map(MessageDto::getId).toList();
+            List<FileDto> allFiles = fileDao.findByMessageIds(msgIds);
+            Map<Long, List<FileDto>> msgFileMap = new HashMap<>();
+            for (FileDto f : allFiles) {
+                Long mid = f.getMessageId();
+                if (mid != null) {
+                    msgFileMap.computeIfAbsent(mid, k -> new java.util.ArrayList<>()).add(f);
+                }
+            }
+
             ArrayNode messagesArray = MAPPER.createArrayNode();
             for (MessageDto msg : messages) {
                 ObjectNode msgNode = MAPPER.createObjectNode();
@@ -194,6 +233,14 @@ public class MessageController {
                 msgNode.put("channelCode", channelCode);
                 String authorCode = userChannelToUserCode.get(msg.getChannelId());
                 msgNode.put("userCode", authorCode != null ? authorCode : "unknown");
+
+                List<FileDto> msgFiles = msgFileMap.get(msg.getId());
+                if (msgFiles != null && !msgFiles.isEmpty()) {
+                    msgNode.set("files", filesToArray(msgFiles));
+                } else {
+                    msgNode.set("files", MAPPER.createArrayNode());
+                }
+
                 messagesArray.add(msgNode);
             }
 
@@ -206,6 +253,19 @@ public class MessageController {
         } catch (Exception e) {
             return buildError("SEARCH_MESSAGES", "Ошибка при поиске сообщений: " + e.getMessage());
         }
+    }
+
+    private ArrayNode filesToArray(List<FileDto> files) {
+        ArrayNode arr = MAPPER.createArrayNode();
+        for (FileDto f : files) {
+            ObjectNode fn = MAPPER.createObjectNode();
+            fn.put("id", f.getId());
+            fn.put("fileName", f.getFileName());
+            fn.put("fileSize", f.getFileSize());
+            fn.put("fileType", f.getFileType() != null ? f.getFileType() : "");
+            arr.add(fn);
+        }
+        return arr;
     }
 
     private String buildSuccess(String action, ObjectNode payload) {

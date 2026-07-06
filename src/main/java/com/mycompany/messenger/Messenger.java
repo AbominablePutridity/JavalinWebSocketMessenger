@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mycompany.messenger.controller.AuthController;
 import com.mycompany.messenger.controller.ChannelController;
+import com.mycompany.messenger.controller.FilesController;
 import com.mycompany.messenger.controller.MessageController;
 import com.mycompany.messenger.dao.DatabaseInit;
 import com.mycompany.messenger.util.JwtService;
 import io.javalin.Javalin;
 import io.javalin.websocket.WsContext;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -42,6 +45,10 @@ public class Messenger {
         ChannelController channelController = new ChannelController(pusher);
         MessageController messageController = new MessageController(pusher);
         JwtService jwtService = authController.getJwtService();
+        FilesController filesController = new FilesController(jwtService);
+
+        // Создаём директорию для загруженных файлов
+        Files.createDirectories(Paths.get("uploads"));
 
         Javalin app = Javalin.create(config -> {
             config.bundledPlugins.enableCors(cors -> {
@@ -157,6 +164,12 @@ public class Messenger {
                     }
                 });
             });
+
+            // HTTP-роуты для загрузки/скачивания файлов
+            config.routes.post("/api/files/upload", filesController::handleUpload);
+            config.routes.get("/api/files/{fileId}", filesController::handleDownload);
+            config.routes.get("/api/files/by-message/{messageId}", filesController::handleListByMessage);
+            config.routes.delete("/api/files/{fileId}", filesController::handleDelete);
         }).start(7070);
 
         System.out.println("Messenger server started on port 7070");

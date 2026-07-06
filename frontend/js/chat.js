@@ -14,18 +14,19 @@ var Chat = {};
 // =============================================
 // renderChatPanel()
 // Возвращает HTML панели чата:
-//   ┌──────────────────────────┐
-//   │  Название_канала  [О канале] │
-//   ├──────────────────────────┤
-//   │  [Сообщение 1]           │
-//   │  [Сообщение 2]           │
-//   │  ...                     │
-//   ├──────────────────────────┤
-//   │  ←  1  →            пагинация │
-//   ├──────────────────────────┤
-//   │  [Введите сообщение...]  │
-//   │  [Отправить]             │
-//   └──────────────────────────┘
+//   ┌────────────────────────────┐
+//   │  Название_канала  [О канале]   │
+//   ├────────────────────────────┤
+//   │  [Сообщение 1]             │
+//   │    📎 photo.jpg (1.2 MB)   │
+//   │  [Сообщение 2]             │
+//   ├────────────────────────────┤
+//   │  ←  1  →              пагинация │
+//   ├────────────────────────────┤
+//   │  [Введите сообщение...]    │
+//   │  📎 [Отправить]            │
+//   │  (файл1.jpg, файл2.pdf)    │
+//   └────────────────────────────┘
 // =============================================
 Chat.renderChatPanel = function() {
     return '' +
@@ -41,6 +42,11 @@ Chat.renderChatPanel = function() {
                 '<button id="messagesNextBtn">&rarr;</button>' +
             '</div>' +
             '<div class="message-input-area">' +
+                '<div class="file-input-row">' +
+                    '<input id="fileInput" type="file" multiple style="display:none;">' +
+                    '<button id="fileAttachBtn" class="attach-btn" title="Прикрепить файл">\uD83D\uDCCE</button>' +
+                    '<span id="fileNames" class="file-names"></span>' +
+                '</div>' +
                 '<textarea id="messageInput" class="message-input" placeholder="Введите сообщение..."></textarea>' +
                 '<button class="send-btn">Отправить</button>' +
             '</div>' +
@@ -58,6 +64,26 @@ Chat.initChatPanel = function() {
     document.getElementById('messagesNextBtn').onclick = Chat.nextPage;
     document.querySelector('.send-btn').onclick = Chat.send;
     document.getElementById('messageInput').onkeydown = Chat.handleKey;
+
+    // Открыть диалог выбора файлов при клике на кнопку скрепки
+    document.getElementById('fileAttachBtn').onclick = function() {
+        document.getElementById('fileInput').click();
+    };
+
+    // При выборе файлов — показываем их имена рядом с кнопкой
+    document.getElementById('fileInput').onchange = function() {
+        var namesEl = document.getElementById('fileNames');
+        var files = this.files;
+        if (files.length === 0) {
+            namesEl.textContent = '';
+            return;
+        }
+        var names = [];
+        for (var i = 0; i < files.length; i++) {
+            names.push(files[i].name);
+        }
+        namesEl.textContent = names.join(', ');
+    };
 };
 
 // =============================================
@@ -136,11 +162,19 @@ Chat.renderMessages = function(data) {
     container.scrollTop = container.scrollHeight;
 };
 
+// HTTP-база для загрузки файлов (адрес сервера, порт 7070)
+// Не используем WS_URL напрямую — он определён в app.js (загружается позже)
+var _httpBase = 'http://localhost:7070';
+
 // =============================================
 // send()
 // Отправляет CREATE_MESSAGE на сервер.
-// При успехе очищает поле ввода и перезагружает
-// сообщения.
+// Если выбраны файлы — сначала загружает их
+// через HTTP POST /api/files/upload, получает
+// fileIds, и только потом отправляет сообщение
+// с этими fileIds.
+// При успехе очищает поле ввода, файлы и
+// перезагружает сообщения.
 // =============================================
 Chat.send = function() {
     if (!AppState.currentChannel) return;
@@ -148,24 +182,77 @@ Chat.send = function() {
     var textInput = document.getElementById('messageInput');
     var text = textInput.value.trim();
 
-    if (!text) return;
+    // Если нет ни текста, ни файлов — ничего не делаем
+    var fileInput = document.getElementById('fileInput');
+    var files = fileInput.files;
+    if (!text && files.length === 0) return;
 
     var channelCode = AppState.currentChannel.code;
 
-    Api.send({
-        action: 'CREATE_MESSAGE',
-        channelCode: channelCode,
-        text: text
-    }, function(response) {
-        if (response.status === 'SUCCESS') {
-            textInput.value = '';
-            if (AppState.currentChannel && AppState.currentChannel.code === channelCode) {
-                Chat.load();
-            }
-        } else {
-            alert('Ошибка: ' + response.error);
+    // Функция, которая отправляет CREATE_MESSAGE после загрузки файлов
+    var doSend = function(fileIds) {
+        var msgData = {
+            action: 'CREATE_MESSAGE',
+            channelCode: channelCode,
+            text: text
+        };
+        if (fileIds && fileIds.length > 0) {
+            msgData.fileIds = fileIds;
         }
-    });
+
+        Api.send(msgData, function(response) {
+            if (response.status === 'SUCCESS') {
+                textInput.value = '';
+                fileInput.value = '';
+                document.getElementById('fileNames').textContent = '';
+                if (AppState.currentChannel && AppState.currentChannel.code === channelCode) {
+                    Chat.load();
+                }
+            } else {
+                alert('Ошибка: ' + response.error);
+            }
+        });
+    };
+
+    // Если есть файлы — загружаем их сначала
+    if (files.length > 0) {
+        var uploadedIds = [];
+        var pending = files.length;
+
+        for (var i = 0; i < files.length; i++) {
+            (function(file) {
+                var formData = new FormData();
+                formData.append('file', file);
+                if (Api.token) {
+                    formData.append('token', Api.token);
+                }
+
+                fetch(_httpBase + '/api/files/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'SUCCESS' && data.payload) {
+                        uploadedIds.push(data.payload.id);
+                    }
+                    pending--;
+                    if (pending === 0) {
+                        doSend(uploadedIds);
+                    }
+                })
+                .catch(function() {
+                    pending--;
+                    if (pending === 0) {
+                        doSend(uploadedIds);
+                    }
+                });
+            })(files[i]);
+        }
+    } else {
+        // Нет файлов — просто текст
+        doSend([]);
+    }
 };
 
 // =============================================
@@ -226,16 +313,35 @@ Chat.delete = function(msgId) {
 };
 
 // =============================================
+// formatFileSize(bytes)
+// Форматирует размер в human-readable вид:
+//   1024 → "1.0 KB"
+//   1048576 → "1.0 MB"
+// =============================================
+function formatFileSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// =============================================
 // createElement(msg)
 // Создаёт DOM-элемент сообщения.
 // Если сообщение принадлежит текущему
 // пользователю — добавляет кнопки ✎ и ✕.
+// Если есть прикреплённые файлы (msg.files) —
+// отображает их как ссылки для скачивания.
 // Формат:
-//   ┌──────────────────┐
-//   │ Имя Фамилия      │
-//   │ Текст сообщения  │
-//   │ 06.07.2026 ✎ ✕   │
-//   └──────────────────┘
+//   ┌─────────────────────┐
+//   │ Имя Фамилия         │
+//   │ Текст сообщения     │
+//   │ ┌─────────────────┐ │
+//   │ │ 📎 photo.jpg    │ │  ← ссылка на скачивание
+//   │ │   1.2 MB        │ │
+//   │ └─────────────────┘ │
+//   │ 06.07.2026 ✎ ✕      │
+//   └─────────────────────┘
 // =============================================
 Chat.createElement = function(msg) {
     var isOwner = (msg.userCode === Api.userCode);
@@ -252,12 +358,48 @@ Chat.createElement = function(msg) {
     textSpan.className = 'msg-text';
     textSpan.textContent = msg.text;
 
+    msgDiv.appendChild(senderSpan);
+    msgDiv.appendChild(textSpan);
+
+    // Если есть прикреплённые файлы — добавляем их
+    var files = msg.files;
+    if (files && files.length > 0) {
+        var filesDiv = document.createElement('div');
+        filesDiv.className = 'msg-files';
+
+        for (var i = 0; i < files.length; i++) {
+            var f = files[i];
+            var fileLink = document.createElement('a');
+            fileLink.className = 'file-attachment';
+            fileLink.href = _httpBase + '/api/files/' + f.id + '?token=' + encodeURIComponent(Api.token);
+            fileLink.target = '_blank';
+            fileLink.title = 'Скачать ' + f.fileName;
+
+            var icon = document.createElement('span');
+            icon.className = 'file-icon';
+            icon.textContent = '\uD83D\uDCCE';
+
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = f.fileName;
+
+            var sizeSpan = document.createElement('span');
+            sizeSpan.className = 'file-size';
+            sizeSpan.textContent = formatFileSize(f.fileSize);
+
+            fileLink.appendChild(icon);
+            fileLink.appendChild(nameSpan);
+            fileLink.appendChild(sizeSpan);
+            filesDiv.appendChild(fileLink);
+        }
+
+        msgDiv.appendChild(filesDiv);
+    }
+
     var dateSpan = document.createElement('div');
     dateSpan.className = 'msg-date';
     dateSpan.textContent = formatDate(msg.dateSend);
 
-    msgDiv.appendChild(senderSpan);
-    msgDiv.appendChild(textSpan);
     msgDiv.appendChild(dateSpan);
 
     if (isOwner) {
