@@ -288,6 +288,11 @@ body {
     border-color: #569cd6;
 }
 
+.msg-search {
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
 .channel-list {
     flex: 1;
     overflow-y: auto;

@@ -11,45 +11,6 @@
 var Auth = {};
 
 // =============================================
-// renderPage()
-// Возвращает HTML-строку с формой авторизации:
-//   ┌─────────────────────┐
-//   │      Messenger       │
-//   ├───────┬─────────────┤
-//   │ Вход  │ Регистрация │  ← табы
-//   ├───────┴─────────────┤
-//   │ [Логин]             │
-//   │ [Пароль]            │
-//   │ [Войти]             │
-//   └─────────────────────┘
-// =============================================
-Auth.renderPage = function() {
-    return '' +
-        '<div class="auth-page">' +
-            '<div class="auth-container">' +
-                '<h1>Messenger</h1>' +
-                '<div class="tabs">' +
-                    '<div id="tabLogin" class="tab active">Вход</div>' +
-                    '<div id="tabRegister" class="tab">Регистрация</div>' +
-                '</div>' +
-                '<div id="authError" class="auth-error" style="display:none;"></div>' +
-                '<div id="loginForm" class="auth-form">' +
-                    '<input id="loginInput" type="text" placeholder="Логин" autocomplete="username">' +
-                    '<input id="passwordInput" type="password" placeholder="Пароль" autocomplete="current-password">' +
-                    '<button id="loginBtn">Войти</button>' +
-                '</div>' +
-                '<div id="registerForm" class="auth-form" style="display:none;">' +
-                    '<input id="regLoginInput" type="text" placeholder="Логин" autocomplete="off">' +
-                    '<input id="regPasswordInput" type="password" placeholder="Пароль (мин. 4 символа)" autocomplete="new-password">' +
-                    '<input id="regNameInput" type="text" placeholder="Имя" autocomplete="off">' +
-                    '<input id="regSurnameInput" type="text" placeholder="Фамилия (опционально)" autocomplete="off">' +
-                    '<button id="registerBtn">Зарегистрироваться</button>' +
-                '</div>' +
-            '</div>' +
-        '</div>';
-};
-
-// =============================================
 // initPage()
 // Навешивает обработчики кликов на табы и кнопки.
 // Вызывается после рендера страницы авторизации.

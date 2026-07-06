@@ -32,6 +32,7 @@ var AppState = {
     channelsPage: 1,            // текущая страница в списке каналов
     channelsSearch: '',         // строка поиска по каналам
     messagesPage: 1,            // текущая страница сообщений в чате
+    messagesSearch: '',         // строка поиска по сообщениям
     membersPage: 1,             // текущая страница списка участников
     currentView: 'chat',        // 'chat' | 'info'
     membersCache: {},           // { channelCode -> [member, ...] } кеш участников
@@ -81,7 +82,8 @@ var App = {};
 // Рендерит страницу входа/регистрации.
 // =============================================
 App.showAuthPage = function() {
-    document.getElementById('app').innerHTML = Auth.renderPage();
+    var template = document.getElementById('auth-template');
+    document.getElementById('app').innerHTML = template.innerHTML;
     Auth.initPage();
 };
 
@@ -101,49 +103,26 @@ App.showAuthPage = function() {
 // и подключает push-обработчик.
 // =============================================
 App.showMainPage = function() {
-    document.getElementById('app').innerHTML = '' +
-        '<div class="main-page">' +
-            '<div class="header">' +
-                '<span class="header-title">Messenger</span>' +
-                '<span id="userDisplayName" class="header-user">Пользователь</span>' +
-                '<span id="userCodeDisplay" class="header-usercode"></span>' +
-                '<button id="themeBtn" class="theme-btn" title="Переключить тему">\u2600</button>' +
-                '<button id="logoutBtn" class="logout-btn">Выйти</button>' +
-            '</div>' +
-            '<div class="content">' +
-                Channels.renderLeftPanel() +
-                '<div class="right-panel">' +
-                    '<div id="welcomePanel" class="panel welcome-panel">' +
-                        '<h2>Добро пожаловать!</h2>' +
-                        '<p>Выберите канал слева, чтобы начать общение.</p>' +
-                    '</div>' +
-                    Chat.renderChatPanel() +
-                    ChannelInfo.renderInfoPanel() +
-                '</div>' +
-            '</div>' +
-        '</div>';
+    var template = document.getElementById('main-template');
+    document.getElementById('app').innerHTML = template.innerHTML;
+    App._initMainPage();
+};
 
+App._initMainPage = function() {
     updateThemeBtn();
-
-    // Заполняем имя и код пользователя в хедере
     document.getElementById('userDisplayName').textContent =
         (Api.userName || 'Пользователь') + ' ' + (Api.userSurname || '');
     document.getElementById('userCodeDisplay').textContent = 'Код: ' + Api.userCode;
-
-    // Клики в хедере
     document.getElementById('themeBtn').onclick = toggleTheme;
     document.getElementById('logoutBtn').onclick = App.logout;
 
-    // Инициализация подмодулей
     Channels.initLeftPanel();
     Chat.initChatPanel();
     ChannelInfo.initInfoPanel();
 
-    // Подключаем обработчики push-событий и восстановления сессии
     Api.onPush = PushHandler.handle;
     Api.onReconnect = App.handleReconnect;
 
-    // Загружаем список каналов и показываем welcome
     Channels.load();
     App.showWelcome();
 };
@@ -190,9 +169,12 @@ App.selectChannel = function(channel) {
     AppState.currentChannel = channel;
     AppState.currentView = 'chat';
     AppState.messagesPage = 1;
+    AppState.messagesSearch = '';
 
     document.getElementById('messagesContainer').innerHTML = '';
     document.getElementById('messagesPageInfo').textContent = '1';
+    var searchEl = document.getElementById('messageSearch');
+    if (searchEl) searchEl.value = '';
 
     // Подсвечиваем выбранный канал
     var btns = document.querySelectorAll('.channel-btn');

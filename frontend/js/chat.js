@@ -12,48 +12,6 @@
 var Chat = {};
 
 // =============================================
-// renderChatPanel()
-// Возвращает HTML панели чата:
-//   ┌────────────────────────────┐
-//   │  Название_канала  [О канале]   │
-//   ├────────────────────────────┤
-//   │  [Сообщение 1]             │
-//   │    📎 photo.jpg (1.2 MB)   │
-//   │  [Сообщение 2]             │
-//   ├────────────────────────────┤
-//   │  ←  1  →              пагинация │
-//   ├────────────────────────────┤
-//   │  [Введите сообщение...]    │
-//   │  📎 [Отправить]            │
-//   │  (файл1.jpg, файл2.pdf)    │
-//   └────────────────────────────┘
-// =============================================
-Chat.renderChatPanel = function() {
-    return '' +
-        '<div id="rightPanel" class="panel right-content" style="display:none;">' +
-            '<div class="chat-header">' +
-                '<h2 id="chatChannelName" class="chat-title">Канал</h2>' +
-                '<button id="channelInfoBtn" class="info-btn">О канале</button>' +
-            '</div>' +
-            '<div id="messagesContainer" class="messages-container"></div>' +
-            '<div class="pagination pagination-msg">' +
-                '<button id="messagesPrevBtn">&larr;</button>' +
-                '<span id="messagesPageInfo">1</span>' +
-                '<button id="messagesNextBtn">&rarr;</button>' +
-            '</div>' +
-            '<div class="message-input-area">' +
-                '<div class="file-input-row">' +
-                    '<input id="fileInput" type="file" multiple style="display:none;">' +
-                    '<button id="fileAttachBtn" class="attach-btn" title="Прикрепить файл">\uD83D\uDCCE</button>' +
-                    '<span id="fileNames" class="file-names"></span>' +
-                '</div>' +
-                '<textarea id="messageInput" class="message-input" placeholder="Введите сообщение..."></textarea>' +
-                '<button class="send-btn">Отправить</button>' +
-            '</div>' +
-        '</div>';
-};
-
-// =============================================
 // initChatPanel()
 // Навешивает обработчики: кнопка "О канале",
 // пагинация сообщений, отправка, Enter.
@@ -64,6 +22,8 @@ Chat.initChatPanel = function() {
     document.getElementById('messagesNextBtn').onclick = Chat.nextPage;
     document.querySelector('.send-btn').onclick = Chat.send;
     document.getElementById('messageInput').onkeydown = Chat.handleKey;
+
+    document.getElementById('messageSearch').oninput = Chat.search;
 
     // Открыть диалог выбора файлов при клике на кнопку скрепки
     document.getElementById('fileAttachBtn').onclick = function() {
@@ -104,6 +64,10 @@ Chat.load = function() {
         size: 50
     };
 
+    if (AppState.messagesSearch) {
+        data.text = AppState.messagesSearch;
+    }
+
     document.getElementById('messagesPageInfo').textContent = AppState.messagesPage;
 
     Api.send(data, function(response) {
@@ -129,6 +93,12 @@ Chat.prevPage = function() {
 
 Chat.nextPage = function() {
     AppState.messagesPage++;
+    Chat.load();
+};
+
+Chat.search = function() {
+    AppState.messagesPage = 1;
+    AppState.messagesSearch = document.getElementById('messageSearch').value.trim();
     Chat.load();
 };
 

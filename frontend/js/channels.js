@@ -12,42 +12,6 @@
 var Channels = {};
 
 // =============================================
-// renderLeftPanel()
-// Возвращает HTML левой панели:
-//   ┌──────────────────┐
-//   │ Каналы           │
-//   │ [+ Создать канал]│
-//   │ [Поиск...]       │
-//   ├──────────────────┤
-//   │ [Канал 1]  ●     │  ● — непрочитано
-//   │ [Канал 2]        │
-//   │ [Канал 3]  ●     │
-//   ├──────────────────┤
-//   │  ←  1  →         │  пагинация
-//   └──────────────────┘
-// =============================================
-Channels.renderLeftPanel = function() {
-    return '' +
-        '<div class="left-panel">' +
-            '<h2>Каналы</h2>' +
-            '<button id="createChannelToggle" class="toggle-btn">+ Создать канал</button>' +
-            '<div id="createChannelPanel" class="create-channel" style="display:none;">' +
-                '<input id="newChannelName" type="text" placeholder="Название">' +
-                '<input id="newChannelDesc" type="text" placeholder="Описание">' +
-                '<button id="createChannelBtn">Создать</button>' +
-                '<button id="createChannelCancel" class="cancel-btn">Отмена</button>' +
-            '</div>' +
-            '<input id="channelSearch" type="text" class="search-input" placeholder="Поиск каналов...">' +
-            '<div id="channelList" class="channel-list"></div>' +
-            '<div class="pagination">' +
-                '<button id="channelsPrevBtn">&larr;</button>' +
-                '<span id="channelPageInfo">1</span>' +
-                '<button id="channelsNextBtn">&rarr;</button>' +
-            '</div>' +
-        '</div>';
-};
-
-// =============================================
 // initLeftPanel()
 // Навешивает обработчики на кнопки и поля ввода
 // левой панели.
