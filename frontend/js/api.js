@@ -1,31 +1,46 @@
-// ========================================
+// =============================================
 // API-слой для WebSocket-соединения
-// ========================================
+// =============================================
+// Этот модуль — единственное окно в мир сервера.
+// Все запросы к бэкенду идут через единственный
+// WebSocket. Ответы сопоставляются с запросами
+// через числовой requestId. Push-уведомления от
+// сервера (новые сообщения, изменения каналов)
+// приходят без requestId и направляются в onPush.
+// =============================================
 
 var Api = {
-    ws: null,
-    connected: false,
-    callbacks: {},              // requestId -> callback
-    onPush: null,               // callback для push-событий (без requestId)
-    onClose: null,
-    onReconnect: null,          // callback для восстановления сессии после переподключения
-    token: null,
-    userCode: null,
-    userName: null,
-    userSurname: null,
-    login: null,                // для восстановления сессии (не сохраняется на диск)
-    password: null,             // для восстановления сессии (не сохраняется на диск)
-    _reqSeq: 0,                 // счётчик для requestId
-    _authenticated: false,      // true после успешного LOGIN/REGISTER
-    _reconnectUrl: null,
-    _reconnectAttempts: 0,
-    _maxReconnectAttempts: 20,
-    _reconnectDelay: 1000,      // начальная задержка (ms)
-    _intentionalDisconnect: false,
-    _heartbeatTimer: null,
-    _heartbeatInterval: 30000   // 30 секунд
+    ws: null,                       // нативный WebSocket-объект
+    connected: false,               // флаг: открыто ли соединение
+    callbacks: {},                  // { requestId -> function } для сопоставления ответов с запросами
+    onPush: null,                   // callback для push-событий от сервера (без requestId)
+    onClose: null,                  // callback при закрытии соединения (кроме intentional)
+    onReconnect: null,              // callback после успешного переподключения (нужен для реавторизации)
+    token: null,                    // JWT-токен (вкладывается в каждый запрос)
+    userCode: null,                 // UUID текущего пользователя
+    userName: null,                 // имя пользователя (для отображения)
+    userSurname: null,              // фамилия
+    login: null,                    // логин (хранится только в памяти для восстановления сессии)
+    password: null,                 // пароль (хранится только в памяти, не на диске!)
+    _reqSeq: 0,                     // счётчик для генерации уникальных requestId
+    _authenticated: false,          // true после успешного LOGIN/REGISTER (влияет на поведение при разрыве)
+    _reconnectUrl: null,            // URL для переподключения
+    _reconnectAttempts: 0,          // сколько раз уже пытались переподключиться
+    _maxReconnectAttempts: 20,      // максимум попыток переподключения
+    _reconnectDelay: 1000,          // начальная задержка перед первой попыткой (ms)
+    _intentionalDisconnect: false,  // true, если disconnect() вызван намеренно (логаут)
+    _heartbeatTimer: null,          // таймер heartbeat'а
+    _heartbeatInterval: 30000       // интервал отправки PING (30 секунд)
 };
 
+// =============================================
+// connect(url, onOpen?, onClose?)
+// Инициирует WebSocket-соединение.
+// - url: адрес WebSocket-сервера
+// - onOpen: вызывается при успешном открытии
+// - onClose: вызывается при закрытии (если не удалось переподключиться)
+// Все старые колбэки сбрасываются.
+// =============================================
 Api.connect = function(url, onOpen, onClose) {
     Api.onClose = onClose;
     Api.callbacks = {};
@@ -37,6 +52,15 @@ Api.connect = function(url, onOpen, onClose) {
     Api._createWebSocket(url, onOpen);
 };
 
+// =============================================
+// _createWebSocket(url, onOpen?)
+// Внутренний метод — создаёт нативный WebSocket.
+// Если ранее было соединение — аккуратно закрывает его.
+// После открытия запускает heartbeat.
+// При получении сообщения диспетчеризует:
+//   - если есть requestId → ищем колбэк в Api.callbacks
+//   - иначе → onPush (серверное push-событие)
+// =============================================
 Api._createWebSocket = function(url, onOpen) {
     if (Api.ws) {
         Api.ws.onopen = null;
@@ -61,8 +85,10 @@ Api._createWebSocket = function(url, onOpen) {
         Api._stopHeartbeat();
         Api.callbacks = {};
 
+        // Если разрыв намеренный — ничего не делаем
         if (Api._intentionalDisconnect) return;
 
+        // Если были авторизованы — пытаемся восстановить соединение
         if (Api._authenticated) {
             Api._tryReconnect();
         } else if (Api.onClose) {
@@ -71,10 +97,12 @@ Api._createWebSocket = function(url, onOpen) {
     };
 
     Api.ws.onerror = function() {
-        // onerror всегда предшествует onclose, всё обрабатывается там
+        // ошибка всегда предшествует закрытию, логика вся в onclose
     };
 
-    // При получении сообщения — ищем колбэк по requestId или вызываем onPush
+    // =============================================
+    // Обработка входящих сообщений с сервера
+    // =============================================
     Api.ws.onmessage = function(event) {
         var response;
         try {
@@ -84,13 +112,13 @@ Api._createWebSocket = function(url, onOpen) {
             return;
         }
 
-        // Если есть requestId — ищем колбэк
+        // Если сообщение — ответ на наш запрос (есть requestId)
         if (response.requestId != null && Api.callbacks[response.requestId]) {
             var callback = Api.callbacks[response.requestId];
             delete Api.callbacks[response.requestId];
             callback(response);
         } else if (Api.onPush) {
-            // Иначе — это push-событие
+            // Иначе это push-уведомление от сервера
             Api.onPush(response);
         } else {
             console.warn('Нет обработчика для:', response.action);
@@ -98,6 +126,14 @@ Api._createWebSocket = function(url, onOpen) {
     };
 };
 
+// =============================================
+// _tryReconnect()
+// Экспоненциальная задержка переподключения.
+// Формула: delay = 1000 * 1.5^(attempt-1), но не более 30 секунд.
+// Максимум 20 попыток, после чего вызывается onClose.
+// После успешного переподключения вызывается
+// onReconnect для повторной авторизации.
+// =============================================
 Api._tryReconnect = function() {
     if (Api._reconnectAttempts >= Api._maxReconnectAttempts) {
         console.error('Не удалось переподключиться после ' + Api._maxReconnectAttempts + ' попыток');
@@ -117,6 +153,13 @@ Api._tryReconnect = function() {
     }, delay);
 };
 
+// =============================================
+// _startHeartbeat / _stopHeartbeat
+// Каждые 30 секунд отправляет PING, чтобы
+// поддерживать WebSocket живым (некоторые
+// прокси/балансировщики обрывают бездействующие
+// соединения). При разрыве heartbeat гасится.
+// =============================================
 Api._startHeartbeat = function() {
     Api._stopHeartbeat();
     Api._heartbeatTimer = setInterval(function() {
@@ -133,6 +176,14 @@ Api._stopHeartbeat = function() {
     }
 };
 
+// =============================================
+// send(data, callback?)
+// Отправляет JSON-объект через WebSocket.
+// Автоматически вкладывает JWT-токен в поле "token".
+// Если передан callback — генерирует requestId
+// и регистрирует колбэк для ответа.
+// Если колбэк не передан — это fire-and-forget.
+// =============================================
 Api.send = function(data, callback) {
     if (!Api.ws || Api.ws.readyState !== WebSocket.OPEN) {
         console.error('WebSocket не подключён');
@@ -152,6 +203,13 @@ Api.send = function(data, callback) {
     Api.ws.send(JSON.stringify(data));
 };
 
+// =============================================
+// disconnect()
+// Намеренное закрытие соединения (логаут).
+// Устанавливает флаг _intentionalDisconnect,
+// чтобы _tryReconnect не сработал.
+// Очищает все колбэки и останавливает heartbeat.
+// =============================================
 Api.disconnect = function() {
     Api._intentionalDisconnect = true;
     Api._authenticated = false;
