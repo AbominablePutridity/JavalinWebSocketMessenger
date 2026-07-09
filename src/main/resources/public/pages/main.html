@@ -1,0 +1,104 @@
+<div class="main-page">
+    <div class="header">
+        <span class="header-title">Messenger</span>
+        <span id="userDisplayName" class="header-user">Пользователь</span>
+        <span id="userCodeDisplay" class="header-usercode"></span>
+        <button id="themeBtn" class="theme-btn" title="Переключить тему">☀</button>
+        <button id="logoutBtn" class="logout-btn">Выйти</button>
+    </div>
+    <div class="content">
+        <div class="left-panel">
+            <h2>Каналы</h2>
+            <button id="createChannelToggle" class="toggle-btn">+ Создать канал</button>
+            <div id="createChannelPanel" class="create-channel" style="display:none;">
+                <input id="newChannelName" type="text" placeholder="Название">
+                <input id="newChannelDesc" type="text" placeholder="Описание">
+                <button id="createChannelBtn">Создать</button>
+                <button id="createChannelCancel" class="cancel-btn">Отмена</button>
+            </div>
+            <input id="channelSearch" type="text" class="search-input" placeholder="Поиск каналов...">
+            <div id="channelList" class="channel-list"></div>
+            <div class="pagination">
+                <button id="channelsPrevBtn">←</button>
+                <span id="channelPageInfo">1</span>
+                <button id="channelsNextBtn">→</button>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div id="welcomePanel" class="panel welcome-panel">
+                <h2>Добро пожаловать!</h2>
+                <p>Выберите канал слева, чтобы начать общение.</p>
+            </div>
+            <div id="rightPanel" class="panel right-content" style="display:none;">
+                <div class="chat-header">
+                    <h2 id="chatChannelName" class="chat-title">Канал</h2>
+                    <button id="channelInfoBtn" class="info-btn">О канале</button>
+                </div>
+                <div id="messagesContainer" class="messages-container"></div>
+                <div class="pagination pagination-msg">
+                    <button id="messagesPrevBtn">←</button>
+                    <span id="messagesPageInfo">1</span>
+                    <button id="messagesNextBtn">→</button>
+                </div>
+                <div class="message-input-area">
+                    <div class="file-input-row">
+                        <input id="fileInput" type="file" multiple style="display:none;">
+                        <button id="fileAttachBtn" class="attach-btn" title="Прикрепить файл">📎</button>
+                        <span id="fileNames" class="file-names"></span>
+                    </div>
+                    <textarea id="messageInput" class="message-input" placeholder="Введите сообщение..."></textarea>
+                    <button class="send-btn">Отправить</button>
+                </div>
+            </div>
+            <div id="channelInfoPanel" class="panel channel-info-panel" style="display:none;">
+                <div class="info-header">
+                    <button id="backToChatBtn" class="back-btn">← Назад к чату</button>
+                </div>
+                <h2>О канале</h2>
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Название:</span>
+                        <span id="infoName" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Описание:</span>
+                        <span id="infoDescription" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Дата создания:</span>
+                        <span id="infoDate" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Владелец:</span>
+                        <span id="infoOwner" class="info-value"></span>
+                    </div>
+                </div>
+                <h3>Участники</h3>
+                <div id="membersList" class="members-list"></div>
+                <div class="pagination pagination-members">
+                    <button id="membersPrevBtn">←</button>
+                    <span id="membersPageInfo">1</span>
+                    <button id="membersNextBtn">→</button>
+                </div>
+                <div id="ownerTools" class="owner-tools" style="display:none;">
+                    <h3>Управление каналом</h3>
+                    <div class="tool-section">
+                        <h4>Редактировать канал</h4>
+                        <input id="editName" type="text" placeholder="Название">
+                        <input id="editDescription" type="text" placeholder="Описание">
+                        <button id="updateChannelBtn">Сохранить</button>
+                    </div>
+                    <div class="tool-section">
+                        <h4>Добавить участника</h4>
+                        <input id="addMemberInput" type="text" placeholder="Код пользователя">
+                        <button id="addMemberBtn">Добавить</button>
+                    </div>
+                    <div class="tool-section">
+                        <h4>Опасная зона</h4>
+                        <button id="deleteChannelBtn" class="danger-btn">Удалить канал</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

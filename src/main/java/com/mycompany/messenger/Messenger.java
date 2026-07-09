@@ -170,6 +170,8 @@ public class Messenger {
             config.routes.get("/api/files/{fileId}", filesController::handleDownload);
             config.routes.get("/api/files/by-message/{messageId}", filesController::handleListByMessage);
             config.routes.delete("/api/files/{fileId}", filesController::handleDelete);
+            
+            config.staticFiles.add("/public");
         }).start(7070);
 
         System.out.println("Messenger server started on port 7070");
